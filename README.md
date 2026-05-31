@@ -3,6 +3,9 @@
 A small system for recording petty-cash transactions in the field (mobile) and
 reviewing / printing / archiving them locally.
 
+- **Repo:** https://github.com/BrianComfort938/petty-cash
+- **Mobile portal** (live once Pages finishes building): https://briancomfort938.github.io/petty-cash/
+
 ## Architecture (free tier, no credit card)
 
 ```
