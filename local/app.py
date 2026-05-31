@@ -63,6 +63,9 @@ def _to_view(doc):
     if isinstance(recorded, datetime):
         recorded = recorded.isoformat()
     m = doc.get("mission", "east")
+    # Receipts may arrive as Base64 data URLs (offline outbox / older docs) or as
+    # raw BSON Binary (economical cloud storage). Normalize both to data URLs for
+    # the in-memory view so the rest of the app is storage-agnostic.
     return {
         "id": rid,
         "mission": m if m in MISSIONS else "east",
@@ -74,9 +77,24 @@ def _to_view(doc):
         "currency": doc.get("currency", "XOF"),
         "method": doc.get("method", ""),
         "recordedAt": recorded or "",
-        "receiptImage": doc.get("receiptImage", ""),
-        "waveReceiptImage": doc.get("waveReceiptImage", ""),
+        "receiptImage": _img_to_data_url(doc.get("receiptImage")),
+        "secondReceiptImage": _img_to_data_url(
+            doc.get("secondReceiptImage", doc.get("waveReceiptImage"))),
+        "signature": doc.get("signature") or None,
     }
+
+
+def _img_to_data_url(val):
+    """Accept a Base64 data URL (str) or raw JPEG bytes (BSON Binary) -> data URL."""
+    if not val:
+        return ""
+    if isinstance(val, str):
+        return val
+    try:
+        b64 = base64.b64encode(bytes(val)).decode("ascii")
+        return "data:image/jpeg;base64," + b64
+    except Exception:
+        return ""
 
 
 def load_queue():
@@ -109,13 +127,34 @@ def _light(t):
             "amount", "currency", "method", "recordedAt")
     out = {k: t[k] for k in keys}
     out["hasReceipt"] = bool(t["receiptImage"])
-    out["hasWaveReceipt"] = bool(t["waveReceiptImage"])
+    out["hasSecondReceipt"] = bool(t["secondReceiptImage"])
+    out["hasSignature"] = bool(t.get("signature"))
+    out["signature"] = t.get("signature")  # compact vector strokes; small enough to inline
     return out
 
 
 def _fmt_amount(amount, currency):
     s = f"{abs(int(amount)):,}"
     return (f"-{s} {currency}" if amount < 0 else f"{s} {currency}")
+
+
+def _signature_svg(sig):
+    """Render compact vector strokes to an inline SVG path for the printed record."""
+    if not sig or not sig.get("s"):
+        return ""
+    w, h = sig.get("w") or 1, sig.get("h") or 1
+    paths = []
+    for flat in sig["s"]:
+        if len(flat) < 2:
+            continue
+        d = "M" + " L".join(f"{flat[i]},{flat[i+1]}" for i in range(0, len(flat) - 1, 2))
+        paths.append(f'<path d="{d}" fill="none" stroke="#1a2228" '
+                     f'stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>')
+    if not paths:
+        return ""
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" '
+            f'preserveAspectRatio="xMidYMid meet" style="width:100%;height:55px">'
+            + "".join(paths) + "</svg>")
 
 
 @app.route("/")
@@ -162,7 +201,7 @@ def api_receipt(tx_id, which):
     t = _find(tx_id)
     if not t:
         abort(404)
-    data_url = t["receiptImage"] if which == "main" else t["waveReceiptImage"]
+    data_url = t["receiptImage"] if which == "main" else t["secondReceiptImage"]
     if not data_url:
         abort(404)
     if "," in data_url:
@@ -182,6 +221,8 @@ def api_edit(tx_id):
     for k in ("beneficiary", "accountCode", "accountName", "description", "method"):
         if k in data:
             t[k] = data[k]
+    if "signature" in data:
+        t["signature"] = data["signature"] or None
     if data.get("mission") in MISSIONS:
         t["mission"] = data["mission"]
     if "amount" in data:
@@ -200,9 +241,10 @@ def api_approve(tx_id):
     if not t:
         abort(404)
     period = STATE["period"]
-    # 1) save receipts to disk (from the in-memory base64)
+    # 1) save receipts + signature to disk (from the in-memory base64 / strokes)
     storage.save_receipt(t["id"], t.get("receiptImage"), "main")
-    storage.save_receipt(t["id"], t.get("waveReceiptImage"), "wave")
+    storage.save_receipt(t["id"], t.get("secondReceiptImage"), "second")
+    storage.save_signature(t["id"], t.get("signature"))
     # 2) persist locally
     storage.write_sqlite(t, period)
     storage.append_csv(t, period)
@@ -249,9 +291,18 @@ def print_record(tx_id):
         date_iso=date_iso, date_fr=date_fr,
         account_name=t["accountName"], description=t["description"],
         amount_str=_fmt_amount(t["amount"], t["currency"]),
-        main_img=t.get("receiptImage", ""), wave_img=t.get("waveReceiptImage", ""),
+        main_img=t.get("receiptImage", ""), wave_img=t.get("secondReceiptImage", ""),
+        signature_svg=_signature_svg(t.get("signature")),
         auto_print=True,
     )
+
+
+@app.route("/api/signature/<tx_id>.svg")
+def api_signature(tx_id):
+    t = _find(tx_id)
+    if not t or not t.get("signature"):
+        abort(404)
+    return Response(_signature_svg(t["signature"]), mimetype="image/svg+xml")
 
 
 @app.route("/print/csv-batch/<batch_id>")

@@ -2,6 +2,7 @@
 100-line rollover rule, plus saving receipt images to disk."""
 import os
 import csv
+import json
 import base64
 import sqlite3
 from datetime import datetime
@@ -15,7 +16,7 @@ MAX_CSV_ROWS = 100
 
 CSV_FIELDS = [
     "recorded_at", "mission", "fund_period", "beneficiary", "account_code", "account_name",
-    "description", "amount", "currency", "method", "transaction_id",
+    "description", "amount", "currency", "method", "signed", "transaction_id",
 ]
 
 
@@ -33,7 +34,7 @@ def init_db():
             recorded_at TEXT, mission TEXT, fund_period TEXT, beneficiary TEXT,
             account_code TEXT, account_name TEXT, description TEXT,
             amount INTEGER, currency TEXT, method TEXT,
-            transaction_id TEXT, logged_at TEXT)"""
+            signed INTEGER, transaction_id TEXT, logged_at TEXT)"""
     )
     con.commit()
     con.close()
@@ -51,6 +52,7 @@ def _row_from_tx(tx, fund_period):
         "amount": int(tx.get("amount", 0) or 0),
         "currency": tx.get("currency", "XOF"),
         "method": tx.get("method", ""),
+        "signed": 1 if tx.get("signature") else 0,
         "transaction_id": tx.get("id", ""),
     }
 
@@ -62,11 +64,12 @@ def write_sqlite(tx, fund_period):
     con.execute(
         """INSERT INTO transactions
            (recorded_at,mission,fund_period,beneficiary,account_code,account_name,
-            description,amount,currency,method,transaction_id,logged_at)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+            description,amount,currency,method,signed,transaction_id,logged_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (row["recorded_at"], row["mission"], row["fund_period"], row["beneficiary"],
          row["account_code"], row["account_name"], row["description"], row["amount"],
-         row["currency"], row["method"], row["transaction_id"], datetime.now().isoformat()),
+         row["currency"], row["method"], row["signed"], row["transaction_id"],
+         datetime.now().isoformat()),
     )
     con.commit()
     con.close()
@@ -135,4 +138,16 @@ def save_receipt(tx_id, data_url, which):
     fname = f"{tx_id}_{which}.{ext}"
     with open(os.path.join(RECEIPTS_DIR, fname), "wb") as f:
         f.write(base64.b64decode(b64))
+    return fname
+
+
+def save_signature(tx_id, sig):
+    """Persist the compact vector-stroke signature next to the receipts as a small
+    JSON file (typically a few hundred bytes), so it can be re-rendered later."""
+    if not sig or not sig.get("s"):
+        return None
+    _ensure_dirs()
+    fname = f"{tx_id}_signature.json"
+    with open(os.path.join(RECEIPTS_DIR, fname), "w", encoding="utf-8") as f:
+        json.dump(sig, f, separators=(",", ":"))  # no whitespace -> smallest file
     return fname

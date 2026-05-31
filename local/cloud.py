@@ -51,7 +51,9 @@ def mark_logged(tx_id, fund_period):
         {"_id": ObjectId(tx_id)},
         {
             "$set": {"logged": True, "loggedAt": datetime.now(timezone.utc), "fundPeriod": fund_period},
-            "$unset": {"receiptImage": "", "waveReceiptImage": ""},
+            # Strip the heavy image blobs once they are saved locally, so the cloud
+            # collection stays tiny. The compact signature strokes are kept.
+            "$unset": {"receiptImage": "", "secondReceiptImage": "", "waveReceiptImage": ""},
         },
     )
 

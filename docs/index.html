@@ -4,68 +4,78 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0f172a">
+  <meta name="theme-color" content="#2d3c45">
   <title>Working Fund</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 
 <body>
   <header class="app-header">
-    <div class="title-row">
-      <h1>Working&nbsp;Fund</h1>
-      <button id="settingsBtn" class="icon-btn" aria-label="Settings">&#9881;</button>
+    <div class="brand">
+      <div class="brand-mark">WF</div>
+      <div class="brand-text">
+        <h1>Working Fund</h1>
+        <div id="connState" class="conn-state offline"><span class="dot"></span>Offline</div>
+      </div>
     </div>
-    <div id="connState" class="conn-state offline">Offline mode</div>
+    <button id="settingsBtn" class="icon-btn" aria-label="Settings" title="Settings">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"
+        stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3"></circle>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z">
+        </path>
+      </svg>
+    </button>
   </header>
 
   <main>
-    <!-- Mission selector -->
-    <section class="card mission-card">
+    <!-- Mission -->
+    <section class="card">
       <span class="field-label">Mission</span>
-      <div class="mission-row" id="missionRow">
-        <button type="button" class="mission-btn" data-mission="east"><span>East</span></button>
-        <button type="button" class="mission-btn" data-mission="south"><span>South</span></button>
+      <div class="segmented" id="missionRow" role="group" aria-label="Mission">
+        <button type="button" class="seg" data-mission="east">East</button>
+        <button type="button" class="seg" data-mission="south">South</button>
       </div>
     </section>
 
     <!-- Wave balance -->
     <section class="card wave-card">
       <div class="wave-head">
-        <span class="wave-label">Wave balance <em id="waveMissionTag"></em></span>
+        <span class="field-label">Wave balance <em id="waveMissionTag"></em></span>
         <button id="editWaveBtn" class="link-btn">Set</button>
       </div>
-      <div id="waveBalance" class="wave-amount">&mdash; XOF</div>
+      <div id="waveBalance" class="wave-amount">&mdash;</div>
       <div id="waveEditRow" class="wave-edit hidden">
         <input id="waveInput" type="text" inputmode="numeric" placeholder="Enter balance">
-        <button id="saveWaveBtn" class="btn small">Save</button>
-        <button id="cancelWaveBtn" class="btn small ghost">Cancel</button>
+        <button id="saveWaveBtn" class="btn small primary">Save</button>
+        <button id="cancelWaveBtn" class="btn small">Cancel</button>
       </div>
     </section>
 
     <!-- Transaction form -->
     <form id="txForm" class="card" autocomplete="off" novalidate>
       <label class="field">
-        <span class="field-label">Beneficiary <em>(demandeur)</em></span>
-        <input id="beneficiary" type="text" placeholder="e.g. Sister Mowkele" required>
+        <span class="field-label">Beneficiary</span>
+        <input id="beneficiary" type="text" placeholder="Full name" required>
       </label>
 
       <label class="field">
         <span class="field-label">Account</span>
         <select id="account" required>
-          <option value="" disabled selected>Choose an account&hellip;</option>
+          <option value="" disabled selected>Select an account</option>
         </select>
       </label>
       <div id="accountChip" class="account-chip hidden"></div>
 
       <label class="field">
-        <span class="field-label">Description <em>(but)</em></span>
+        <span class="field-label">Description</span>
         <textarea id="description" rows="2" placeholder="Purpose of the expense"></textarea>
       </label>
 
       <div class="field">
         <span class="field-label">Amount</span>
         <div class="amount-row">
-          <button type="button" id="signBtn" class="sign-btn" aria-label="Toggle positive / negative">+</button>
+          <button type="button" id="signBtn" class="sign-btn" aria-label="Toggle positive or negative">+</button>
           <input id="amount" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="0" autocomplete="off">
           <span class="cur">XOF</span>
         </div>
@@ -74,38 +84,47 @@
 
       <div class="field">
         <span class="field-label">Method</span>
-        <div class="method-row" id="methodRow">
-          <button type="button" class="method-btn" data-method="cash"><span class="m-emoji">&#128181;</span><span>Cash</span></button>
-          <button type="button" class="method-btn" data-method="wave"><span class="m-emoji">&#127754;</span><span>Wave</span></button>
-          <button type="button" class="method-btn" data-method="orange"><span class="m-emoji">&#128992;</span><span>Orange</span></button>
+        <div class="segmented" id="methodRow" role="group" aria-label="Method">
+          <button type="button" class="seg" data-method="cash">Cash</button>
+          <button type="button" class="seg" data-method="wave">Wave</button>
+          <button type="button" class="seg" data-method="orange">Orange Money</button>
         </div>
-        <div id="waveNote" class="wave-note hidden">This amount will be subtracted from your Wave balance.</div>
+        <div id="methodNote" class="method-note hidden">This amount will be subtracted from the Wave balance.</div>
       </div>
 
       <div class="field">
-        <span class="field-label">Receipt photo</span>
+        <span class="field-label">Receipt</span>
         <div class="photo-actions">
-          <label class="btn ghost">&#128247; Camera
+          <label class="btn file-btn">Camera
             <input type="file" accept="image/*" capture="environment" id="receiptCam" hidden>
           </label>
-          <label class="btn ghost">&#128444;&#65039; Gallery
+          <label class="btn file-btn">Upload
             <input type="file" accept="image/*" id="receiptGal" hidden>
           </label>
         </div>
         <div id="receiptPreview" class="preview hidden"></div>
       </div>
 
-      <div class="field hidden" id="waveReceiptField">
-        <span class="field-label">Wave receipt / screenshot</span>
+      <div class="field hidden" id="secondReceiptField">
+        <span class="field-label" id="secondReceiptLabel">Wave receipt</span>
         <div class="photo-actions">
-          <label class="btn ghost">&#128247; Camera
-            <input type="file" accept="image/*" capture="environment" id="waveCam" hidden>
+          <label class="btn file-btn">Camera
+            <input type="file" accept="image/*" capture="environment" id="secondCam" hidden>
           </label>
-          <label class="btn ghost">&#128444;&#65039; Gallery
-            <input type="file" accept="image/*" id="waveGal" hidden>
+          <label class="btn file-btn">Upload
+            <input type="file" accept="image/*" id="secondGal" hidden>
           </label>
         </div>
-        <div id="wavePreview" class="preview hidden"></div>
+        <div id="secondPreview" class="preview hidden"></div>
+      </div>
+
+      <div class="field">
+        <span class="field-label">Signature</span>
+        <div id="sigPreview" class="sig-preview empty"><span class="sig-empty-text">No signature collected</span></div>
+        <div class="photo-actions">
+          <button type="button" class="btn" id="collectSigBtn">Collect signature</button>
+          <button type="button" class="btn hidden" id="removeSigBtn">Remove</button>
+        </div>
       </div>
 
       <button type="submit" class="btn primary big" id="submitBtn">Save transaction</button>
@@ -122,16 +141,32 @@
   <!-- Settings modal -->
   <div id="settingsModal" class="modal hidden">
     <div class="modal-card">
-      <h2>Settings</h2>
+      <div class="modal-head"><h2>Settings</h2></div>
       <label class="field">
         <span class="field-label">Backend API URL</span>
         <input id="apiUrlInput" type="url" placeholder="https://your-app.vercel.app/api">
       </label>
       <p class="hint">Leave empty to stay in offline mode. Submissions queue on this
-        phone until a backend is set and reachable.</p>
+        device until a backend is set and reachable.</p>
       <div class="modal-actions">
+        <span class="spacer"></span>
+        <button id="closeSettings" class="btn">Close</button>
         <button id="saveSettings" class="btn primary">Save</button>
-        <button id="closeSettings" class="btn ghost">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Signature modal -->
+  <div id="sigModal" class="modal hidden">
+    <div class="modal-card sig-card">
+      <div class="modal-head"><h2>Signature</h2></div>
+      <p class="hint">Sign inside the box below.</p>
+      <div id="sigCanvasWrap" class="sig-canvas-wrap"><canvas id="sigCanvas"></canvas></div>
+      <div class="modal-actions">
+        <button id="sigClear" class="btn">Clear</button>
+        <span class="spacer"></span>
+        <button id="sigCancel" class="btn">Cancel</button>
+        <button id="sigSave" class="btn primary">Save</button>
       </div>
     </div>
   </div>

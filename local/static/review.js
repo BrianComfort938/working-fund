@@ -36,6 +36,8 @@
   };
   const MISSIONS = ["east", "south"];
   const titleCase = (m) => (m === "south" ? "South" : "East");
+  const METHOD_LABELS = { cash: "Cash", wave: "Wave", orange: "Orange Money" };
+  const methodLabel = (m) => METHOD_LABELS[m] || m || "";
 
   const $ = (id) => document.getElementById(id);
   const state = {
@@ -149,27 +151,30 @@
     const card = $("card");
     const t = cur();
     if (!t) {
-      card.innerHTML = `<div class="done"><div class="big">✓</div>
+      card.innerHTML = `<div class="done"><div class="big">&#10003;</div>
         <h2>No ${titleCase(state.mission)} transactions to review</h2>
         <p class="muted">Nothing left in this mission. Try the other mission (press <kbd>M</kbd>), or close this tab.</p></div>`;
       return;
     }
     const color = seriesColor(t.accountName);
     const neg = t.amount < 0;
+    const secondLabel = t.method === "orange" ? "Orange Money receipt" : "Wave receipt";
     let receipts = "";
-    if (t.hasReceipt || t.hasWaveReceipt) {
+    if (t.hasReceipt || t.hasSecondReceipt || t.hasSignature) {
       receipts = `<div class="receipts">`;
       if (t.hasReceipt)
         receipts += `<figure><figcaption>Receipt</figcaption><img src="/api/receipt/${t.id}/main"></figure>`;
-      if (t.hasWaveReceipt)
-        receipts += `<figure><figcaption>Wave receipt</figcaption><img src="/api/receipt/${t.id}/wave"></figure>`;
+      if (t.hasSecondReceipt)
+        receipts += `<figure><figcaption>${secondLabel}</figcaption><img src="/api/receipt/${t.id}/second"></figure>`;
+      if (t.hasSignature)
+        receipts += `<figure><figcaption>Signature</figcaption><canvas class="sig-box" data-sig="${t.id}" width="240" height="90"></canvas></figure>`;
       receipts += `</div>`;
     }
     card.innerHTML = `
       <div class="top">
         <div>
           <div class="who">${esc(t.beneficiary) || "(no beneficiary)"}</div>
-          <div class="when">🕒 ${fmtWhen(t.recordedAt)} · <span class="mission-pill ${t.mission}">${titleCase(t.mission)}</span></div>
+          <div class="when">${fmtWhen(t.recordedAt)} &middot; <span class="mission-pill ${t.mission}">${titleCase(t.mission)}</span></div>
         </div>
         <div class="amount ${neg ? "neg" : ""}">${fmtAmount(t.amount, t.currency)}</div>
       </div>
@@ -179,7 +184,7 @@
         <span>${esc(t.accountName)}</span>
       </div>
       <div class="desc">${esc(t.description) || "<span class='muted'>(no description)</span>"}</div>
-      <span class="method ${t.method}">${esc(t.method) || "—"}</span>
+      <span class="method ${t.method}">${esc(methodLabel(t.method)) || "-"}</span>
       ${receipts}
       <div class="actions">
         <button class="btn approve" data-act="approve">Approve &amp; print <kbd>A</kbd></button>
@@ -188,6 +193,31 @@
       </div>`;
     card.querySelectorAll("[data-act]").forEach((b) =>
       b.addEventListener("click", () => doAction(b.dataset.act)));
+    // Render any signature strokes onto their canvas (vector -> crisp, economical).
+    card.querySelectorAll("canvas[data-sig]").forEach((cv) => {
+      if (t.signature) drawSignature(cv, t.signature, 6);
+    });
+  }
+
+  // Draw compact vector-stroke signature {w,h,s:[[x,y,...],...]} fit-to-canvas.
+  function drawSignature(canvas, sig, pad) {
+    const ctx = canvas.getContext("2d");
+    const cw = canvas.width, ch = canvas.height;
+    ctx.clearRect(0, 0, cw, ch);
+    if (!sig || !sig.s || !sig.s.length) return;
+    pad = pad || 0;
+    const scale = Math.min((cw - 2 * pad) / sig.w, (ch - 2 * pad) / sig.h);
+    const ox = (cw - sig.w * scale) / 2, oy = (ch - sig.h * scale) / 2;
+    ctx.lineWidth = Math.max(1.3, 2 * scale);
+    ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.strokeStyle = "#1a2228";
+    sig.s.forEach((flat) => {
+      ctx.beginPath();
+      for (let i = 0; i < flat.length; i += 2) {
+        const x = ox + flat[i] * scale, y = oy + flat[i + 1] * scale;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    });
   }
 
   function buildAccountOptions(selected) {
@@ -229,7 +259,7 @@
           <input id="e_amt" inputmode="numeric" value="${Math.abs(t.amount)}"></div></div>
       <div class="field"><label>Method</label>
         <select id="e_method">
-          ${["cash", "wave", "orange"].map((m) => `<option value="${m}" ${m === t.method ? "selected" : ""}>${m}</option>`).join("")}
+          ${["cash", "wave", "orange"].map((m) => `<option value="${m}" ${m === t.method ? "selected" : ""}>${methodLabel(m)}</option>`).join("")}
         </select></div>
       <div class="actions">
         <button class="btn primary" id="e_save">Save <kbd>Enter</kbd></button>
