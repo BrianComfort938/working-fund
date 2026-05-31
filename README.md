@@ -81,6 +81,11 @@ are saved to `local/receipts/`.
 
 ## Next steps
 
-1. Deploy `docs/` + `api/` following [SETUP.md](SETUP.md) (Atlas → Vercel → Pages).
-2. Try the local app above (runs in DEMO mode with sample data until your Atlas
+1. ✅ **Pushed to GitHub** — repo above, with Pages enabled from `/docs`
+   (portal at https://briancomfort938.github.io/petty-cash/, live ~1 min after
+   the first build).
+2. Deploy `api/` and create the database following [SETUP.md](SETUP.md)
+   (MongoDB Atlas → Vercel), then open the portal's ⚙️ menu and paste your Vercel
+   API URL to connect the phone to the cloud.
+3. Try the local app above (runs in DEMO mode with sample data until your Atlas
    URI is set), then switch SQLite → MySQL when ready.
