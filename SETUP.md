@@ -24,10 +24,10 @@ Three free services, no credit card needed:
 
 ---
 
-## 2. Push this project to GitHub
+## 2. Push this project to GitHub  ✅ done
 
-Create a new repository and push this folder. (Tell me when you're ready and I'll
-set up git and the first commit for you.)
+Already on GitHub: **https://github.com/BrianComfort938/working-fund** (public,
+branch `main`). Future changes just need `git push`.
 
 ---
 
