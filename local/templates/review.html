@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Petty Cash — Review</title>
+  <link rel="stylesheet" href="/static/review.css">
+</head>
+
+<body>
+  <header>
+    <div class="brand">
+      <strong>Petty Cash</strong><span class="muted"> · Review</span>
+      <span id="mode" class="badge"></span>
+    </div>
+    <div class="period">
+      <label for="period">Fund period</label>
+      <input id="period" inputmode="numeric" maxlength="3" value="000" title="000–999">
+    </div>
+    <div id="progress" class="progress"></div>
+  </header>
+
+  <main>
+    <section class="col-main">
+      <div id="card" class="card"></div>
+      <div id="editor" class="editor hidden"></div>
+    </section>
+
+    <aside class="col-side">
+      <div id="calendar" class="calendar"></div>
+      <div class="shortcuts">
+        <h3>Keyboard</h3>
+        <ul>
+          <li><kbd>A</kbd> approve &amp; print</li>
+          <li><kbd>E</kbd> edit</li>
+          <li><kbd>D</kbd> delete</li>
+          <li><kbd>←</kbd> <kbd>→</kbd> prev / next</li>
+          <li><kbd>Enter</kbd> save · <kbd>Esc</kbd> cancel</li>
+          <li><kbd>[</kbd> <kbd>]</kbd> calendar month</li>
+        </ul>
+      </div>
+    </aside>
+  </main>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="/static/review.js"></script>
+</body>
+
+</html>

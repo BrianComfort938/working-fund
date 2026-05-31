@@ -1,0 +1,146 @@
+:root {
+  --bg: #0f172a;
+  --surface: #1e293b;
+  --surface-2: #334155;
+  --text: #f1f5f9;
+  --muted: #94a3b8;
+  --border: #334155;
+  --primary: #2563eb;
+  --ok: #16a34a;
+  --danger: #dc2626;
+  --radius: 12px;
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+}
+
+header {
+  display: flex; align-items: center; gap: 20px;
+  padding: 12px 20px; border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; background: rgba(15,23,42,.95); z-index: 5;
+}
+.brand { font-size: 18px; }
+.muted { color: var(--muted); }
+.badge {
+  margin-left: 10px; font-size: 12px; padding: 2px 8px; border-radius: 999px;
+  background: var(--surface-2); color: var(--muted);
+}
+.badge.demo { background: #78350f; color: #fde68a; }
+.badge.cloud { background: #064e3b; color: #6ee7b7; }
+.period { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.period label { color: var(--muted); font-size: 13px; }
+.period input {
+  width: 70px; text-align: center; font-size: 18px; letter-spacing: 3px;
+  background: var(--bg); color: var(--text); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px;
+}
+.progress { font-size: 14px; color: var(--muted); min-width: 70px; text-align: right; }
+
+main {
+  display: grid; grid-template-columns: 1fr 360px; gap: 18px;
+  max-width: 1100px; margin: 18px auto; padding: 0 18px;
+}
+@media (max-width: 860px) { main { grid-template-columns: 1fr; } }
+
+.card, .editor, .calendar, .shortcuts {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 18px;
+}
+
+/* Transaction card */
+.card .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.card .who { font-size: 22px; font-weight: 700; }
+.card .when { font-size: 13px; color: var(--muted); margin-top: 2px; }
+.amount { font-size: 30px; font-weight: 800; }
+.amount.neg { color: #fca5a5; }
+.account-chip {
+  display: inline-flex; align-items: center; gap: 8px; margin: 14px 0;
+  padding: 8px 12px; border-radius: 8px; background: var(--surface-2);
+  border-left: 5px solid var(--muted); font-size: 14px;
+}
+.account-chip .swatch { width: 12px; height: 12px; border-radius: 3px; }
+.account-chip .code { font-weight: 700; }
+.desc { font-size: 16px; margin: 6px 0 14px; }
+.method {
+  display: inline-block; font-size: 12px; text-transform: uppercase; letter-spacing: .5px;
+  padding: 3px 10px; border-radius: 999px; border: 1px solid var(--border);
+}
+.method.cash { background: #16a34a22; border-color: var(--ok); }
+.method.wave { background: #38bdf822; border-color: #38bdf8; }
+.method.orange { background: #f9731622; border-color: #f97316; }
+.receipts { display: flex; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
+.receipts figure { margin: 0; }
+.receipts figcaption { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+.receipts img {
+  max-width: 220px; max-height: 260px; border: 1px solid var(--border); border-radius: 8px; background: #fff;
+}
+.actions { display: flex; gap: 10px; margin-top: 18px; }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+  padding: 11px 16px; border-radius: 9px; font-size: 15px; font-weight: 600;
+  border: 1px solid var(--border); background: var(--surface-2); color: var(--text);
+}
+.btn kbd { font-size: 11px; opacity: .8; }
+.btn.approve { background: var(--ok); border-color: var(--ok); color: #fff; }
+.btn.delete { background: transparent; border-color: var(--danger); color: #fca5a5; }
+.btn.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+.btn.ghost { background: transparent; }
+
+.done { text-align: center; padding: 50px 10px; }
+.done .big { font-size: 40px; margin-bottom: 8px; }
+
+/* Editor */
+.editor .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.editor label { font-size: 13px; color: var(--muted); }
+.editor input, .editor textarea, .editor select {
+  background: var(--bg); color: var(--text); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px; font-size: 15px; font-family: inherit; width: 100%;
+}
+.editor .amount-row { display: flex; gap: 8px; }
+.editor .sign-btn {
+  width: 48px; font-size: 22px; font-weight: 700; background: var(--surface-2);
+  color: var(--text); border: 1px solid var(--border); border-radius: 8px; cursor: pointer;
+}
+.editor .sign-btn.neg { background: var(--danger); border-color: var(--danger); color: #fff; }
+
+/* Calendar */
+.calendar .cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.calendar .cal-title { font-weight: 700; }
+.calendar .nav { background: var(--surface-2); border: 1px solid var(--border); color: var(--text);
+  border-radius: 6px; cursor: pointer; width: 28px; height: 28px; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.cal-grid .dow { text-align: center; font-size: 11px; color: var(--muted); padding: 2px 0; }
+.cal-grid .day {
+  aspect-ratio: 1 / 1; display: flex; align-items: center; justify-content: center;
+  font-size: 13px; border-radius: 6px; position: relative; color: var(--text);
+}
+.cal-grid .day.blank { visibility: hidden; }
+.cal-grid .day.has { cursor: pointer; background: var(--surface-2); }
+.cal-grid .day.has::after {
+  content: ""; position: absolute; bottom: 4px; width: 5px; height: 5px;
+  border-radius: 50%; background: #38bdf8;
+}
+.cal-grid .day.current { outline: 2px solid var(--primary); font-weight: 700; }
+
+.shortcuts { margin-top: 16px; }
+.shortcuts h3 { margin: 0 0 8px; font-size: 14px; color: var(--muted); }
+.shortcuts ul { list-style: none; margin: 0; padding: 0; font-size: 13px; }
+.shortcuts li { padding: 4px 0; }
+kbd {
+  background: var(--surface-2); border: 1px solid var(--border); border-bottom-width: 2px;
+  border-radius: 5px; padding: 1px 6px; font-family: inherit; font-size: 12px;
+}
+
+.toast {
+  position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+  background: var(--surface-2); border: 1px solid var(--border); color: var(--text);
+  padding: 12px 18px; border-radius: 999px; font-size: 15px; z-index: 50;
+  box-shadow: 0 8px 24px rgba(0,0,0,.4);
+}
+.toast.ok { background: #14532d; border-color: var(--ok); }
+.toast.err { background: #450a0a; border-color: var(--danger); }
+.hidden { display: none !important; }

@@ -1,0 +1,9 @@
+{
+  "name": "pettycash-api",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Secure API layer (Vercel serverless functions) for the petty cash app",
+  "dependencies": {
+    "mongodb": "^6.5.0"
+  }
+}

@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>CSV Backup Batch {{ batch_id }}</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 10mm;
+        }
+
+        body {
+            font-family: Calibri, Arial, sans-serif;
+            font-size: 7.5pt;
+            margin: 0;
+        }
+
+        h1 {
+            font-size: 12pt;
+            margin: 0 0 6px;
+        }
+
+        .sub {
+            font-size: 8pt;
+            color: #444;
+            margin: 0 0 8px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th,
+        td {
+            border: 1px solid #999;
+            padding: 1px 3px;
+            text-align: left;
+            white-space: nowrap;
+            overflow: hidden;
+        }
+
+        th {
+            background: #eee;
+        }
+
+        td.amt {
+            text-align: right;
+        }
+
+        td.desc {
+            white-space: normal;
+        }
+
+        @media print {
+            body {
+                -webkit-print-color-adjust: exact;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Transaction Backup &mdash; Batch {{ batch_id }}</h1>
+    <p class="sub">{{ count }} rows archived from transaction-backup.csv</p>
+    <table>
+        <tr>
+            <th>#</th>
+            <th>Recorded</th>
+            <th>Period</th>
+            <th>Beneficiary</th>
+            <th>Account</th>
+            <th>Description</th>
+            <th>Amount</th>
+            <th>Method</th>
+        </tr>
+        {% for r in rows %}
+        <tr>
+            <td>{{ loop.index }}</td>
+            <td>{{ r.recorded_at[:16] }}</td>
+            <td>{{ r.fund_period }}</td>
+            <td>{{ r.beneficiary }}</td>
+            <td>{{ r.account_name }}</td>
+            <td class="desc">{{ r.description }}</td>
+            <td class="amt">{{ r.amount }} {{ r.currency }}</td>
+            <td>{{ r.method }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+    {% if auto_print %}<script>
+        window.addEventListener('load', function () { setTimeout(function () { window.print(); }, 300); });
+        window.addEventListener('afterprint', function () { window.close(); });
+    </script>{% endif %}
+</body>
+
+</html>
