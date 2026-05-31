@@ -13,6 +13,7 @@ module.exports = async (req, res) => {
     if (req.method === "POST") {
       const body = readBody(req);
       const doc = {
+        mission: body.mission === "south" ? "south" : "east",
         beneficiary: body.beneficiary || "",
         accountCode: body.accountCode || "",
         accountName: body.accountName || "",
@@ -31,8 +32,10 @@ module.exports = async (req, res) => {
     }
 
     if (req.method === "GET") {
-      const all = req.query && (req.query.all === "1" || req.query.all === "true");
+      const q = req.query || {};
+      const all = q.all === "1" || q.all === "true";
       const query = all ? {} : { logged: { $ne: true } };
+      if (q.mission === "east" || q.mission === "south") query.mission = q.mission;
       const docs = await col.find(query).sort({ createdAt: 1 }).toArray();
       return res.json(docs);
     }

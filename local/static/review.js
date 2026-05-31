@@ -34,9 +34,14 @@
     const n = Math.abs(parseInt(amt, 10) || 0);
     return (amt < 0 ? "-" : "") + groupDigits(n) + " " + (cur || "XOF");
   };
+  const MISSIONS = ["east", "south"];
+  const titleCase = (m) => (m === "south" ? "South" : "East");
 
   const $ = (id) => document.getElementById(id);
-  const state = { queue: [], idx: 0, period: "000", cloud: false, editing: false, signNeg: false, calRef: null };
+  const state = {
+    queue: [], idx: 0, period: "000", mission: "east", counts: { east: 0, south: 0 },
+    cloud: false, editing: false, signNeg: false, calRef: null,
+  };
 
   // ---- api ----
   async function api(path, opts) {
@@ -58,23 +63,71 @@
   // ---- load ----
   async function load() {
     const s = await api("/api/state");
-    state.queue = s.queue;
     state.period = s.period;
     state.cloud = s.cloud;
+    state.counts = s.counts || { east: 0, south: 0 };
     $("period").value = s.period;
     const mode = $("mode");
     mode.textContent = s.cloud ? "cloud" : "demo data";
     mode.className = "badge " + (s.cloud ? "cloud" : "demo");
-    if (state.idx >= state.queue.length) state.idx = Math.max(0, state.queue.length - 1);
+
+    // Restore the reviewer's last mission from this browser (default = server's).
+    const saved = localStorage.getItem("workingfund_mission");
+    const wanted = MISSIONS.indexOf(saved) !== -1 ? saved : s.mission;
+    await applyMission(wanted, s.mission, s.queue);
+  }
+
+  async function applyMission(wanted, serverMission, serverQueue) {
+    if (wanted === serverMission && serverQueue) {
+      state.mission = serverMission;
+      state.queue = serverQueue;
+    } else {
+      const res = await api("/api/mission", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mission: wanted }),
+      });
+      state.mission = res.mission;
+      state.counts = res.counts || state.counts;
+      state.queue = res.queue;
+    }
+    localStorage.setItem("workingfund_mission", state.mission);
+    state.idx = 0;
+    state.editing = false;
+    state.calRef = null;
     renderAll();
+  }
+
+  async function switchMission(m) {
+    if (MISSIONS.indexOf(m) === -1 || m === state.mission) return;
+    try {
+      const res = await api("/api/mission", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mission: m }),
+      });
+      state.mission = res.mission;
+      state.counts = res.counts || state.counts;
+      state.queue = res.queue;
+      localStorage.setItem("workingfund_mission", state.mission);
+      state.idx = 0; state.editing = false; state.calRef = null;
+      renderAll();
+      toast("Mission: " + titleCase(state.mission), "ok");
+    } catch (e) { toast("Could not switch mission", "err"); }
   }
 
   // ---- render ----
   function renderAll() {
+    renderMission();
     renderProgress();
     if (state.editing) renderEditor(); else $("editor").classList.add("hidden");
     renderCard();
     renderCalendar();
+  }
+
+  function renderMission() {
+    $("cntEast").textContent = state.counts.east || 0;
+    $("cntSouth").textContent = state.counts.south || 0;
+    document.querySelectorAll(".mission-tab").forEach((b) =>
+      b.setAttribute("aria-pressed", String(b.dataset.mission === state.mission)));
   }
 
   function renderProgress() {
@@ -97,8 +150,8 @@
     const t = cur();
     if (!t) {
       card.innerHTML = `<div class="done"><div class="big">✓</div>
-        <h2>All transactions handled</h2>
-        <p class="muted">Nothing left to review. You can close this tab.</p></div>`;
+        <h2>No ${titleCase(state.mission)} transactions to review</h2>
+        <p class="muted">Nothing left in this mission. Try the other mission (press <kbd>M</kbd>), or close this tab.</p></div>`;
       return;
     }
     const color = seriesColor(t.accountName);
@@ -116,7 +169,7 @@
       <div class="top">
         <div>
           <div class="who">${esc(t.beneficiary) || "(no beneficiary)"}</div>
-          <div class="when">🕒 ${fmtWhen(t.recordedAt)}</div>
+          <div class="when">🕒 ${fmtWhen(t.recordedAt)} · <span class="mission-pill ${t.mission}">${titleCase(t.mission)}</span></div>
         </div>
         <div class="amount ${neg ? "neg" : ""}">${fmtAmount(t.amount, t.currency)}</div>
       </div>
@@ -162,6 +215,10 @@
     ed.innerHTML = `
       <div class="field"><label>Beneficiary</label>
         <input id="e_ben" value="${esc(t.beneficiary)}"></div>
+      <div class="field"><label>Mission</label>
+        <select id="e_mission">
+          ${MISSIONS.map((m) => `<option value="${m}" ${m === t.mission ? "selected" : ""}>${titleCase(m)}</option>`).join("")}
+        </select></div>
       <div class="field"><label>Account</label>
         <select id="e_acc">${buildAccountOptions(t.accountCode)}</select></div>
       <div class="field"><label>Description</label>
@@ -195,8 +252,10 @@
     const digits = ($("e_amt").value || "").replace(/\D/g, "");
     const amount = (state.signNeg ? -1 : 1) * (parseInt(digits, 10) || 0);
     const code = $("e_acc").value;
+    const newMission = $("e_mission").value;
     const payload = {
       beneficiary: $("e_ben").value.trim(),
+      mission: newMission,
       accountCode: code,
       accountName: ACCOUNT_CODES[code] || t.accountName,
       description: $("e_desc").value.trim(),
@@ -204,12 +263,20 @@
       method: $("e_method").value,
     };
     try {
-      const res = await api(`/api/edit/${t.id}`, {
+      await api(`/api/edit/${t.id}`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      Object.assign(t, res.tx);
       state.editing = false;
+      // Editing the mission can move a transaction out of the current view, so
+      // re-pull the filtered queue + counts.
+      const res = await api("/api/mission", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mission: state.mission }),
+      });
+      state.counts = res.counts || state.counts;
+      state.queue = res.queue;
+      if (state.idx >= state.queue.length) state.idx = Math.max(0, state.queue.length - 1);
       renderAll();
       toast("Saved", "ok");
     } catch (e) { toast("Save failed", "err"); }
@@ -246,6 +313,7 @@
   }
 
   function removeCurrent() {
+    if (state.counts[state.mission] > 0) state.counts[state.mission] -= 1;
     state.queue.splice(state.idx, 1);
     if (state.idx >= state.queue.length) state.idx = Math.max(0, state.queue.length - 1);
     state.editing = false;
@@ -335,6 +403,7 @@
       case "a": doAction("approve"); break;
       case "e": doAction("edit"); break;
       case "d": doAction("delete"); break;
+      case "m": switchMission(state.mission === "east" ? "south" : "east"); break;
       case "arrowright": case " ": e.preventDefault(); move(1); break;
       case "arrowleft": move(-1); break;
       case "[": { const r = state.calRef || new Date(); state.calRef = new Date(r.getFullYear(), r.getMonth() - 1, 1); renderCalendar(); break; }
@@ -351,6 +420,8 @@
   // ---- init ----
   document.addEventListener("DOMContentLoaded", () => {
     $("period").addEventListener("change", savePeriod);
+    document.querySelectorAll(".mission-tab").forEach((b) =>
+      b.addEventListener("click", () => switchMission(b.dataset.mission)));
     document.addEventListener("keydown", onKey);
     load().catch(() => toast("Could not load transactions", "err"));
   });

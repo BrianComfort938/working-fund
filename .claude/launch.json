@@ -2,13 +2,13 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "petty-cash-portal",
+      "name": "working-fund-portal",
       "runtimeExecutable": "python",
       "runtimeArgs": ["-m", "http.server", "8090", "--directory", "docs"],
       "port": 8090
     },
     {
-      "name": "petty-cash-review",
+      "name": "working-fund-review",
       "runtimeExecutable": "python",
       "runtimeArgs": ["local/app.py"],
       "port": 5000

@@ -1,8 +1,11 @@
-"""Local petty-cash review app.
+"""Local Working Fund review app.
 
 On run it pulls unlogged transactions from MongoDB Atlas (or demo data), serves a
 keyboard-driven review page in your browser, and on approval prints the physical
 record and saves to SQLite + transaction-backup.csv.
+
+The reviewer picks a mission (East or South); only that mission's transactions
+are shown and acted on.
 
     python app.py            # uses .env / environment for MONGODB_URI
 """
@@ -26,7 +29,9 @@ import storage
 app = Flask(__name__)
 
 # Single local user -> simple in-memory session state.
-STATE = {"queue": [], "period": "000"}
+# "all" holds every unlogged transaction; the UI shows only the selected mission.
+STATE = {"all": [], "mission": "east", "period": "000"}
+MISSIONS = ("east", "south")
 
 METHOD_LABELS = {"cash": "ESPÈCES", "wave": "WAVE", "orange": "ORANGE"}
 
@@ -57,8 +62,10 @@ def _to_view(doc):
     recorded = doc.get("createdAt") or doc.get("clientCreatedAt")
     if isinstance(recorded, datetime):
         recorded = recorded.isoformat()
+    m = doc.get("mission", "east")
     return {
         "id": rid,
+        "mission": m if m in MISSIONS else "east",
         "beneficiary": doc.get("beneficiary", ""),
         "accountCode": doc.get("accountCode", ""),
         "accountName": doc.get("accountName", ""),
@@ -73,20 +80,32 @@ def _to_view(doc):
 
 
 def load_queue():
-    docs = cloud.fetch_unlogged()
+    docs = cloud.fetch_unlogged()  # fetch all missions; filter in the UI
     if docs is None:
         import demo_data
         docs = demo_data.SAMPLES
         app.logger.info("No MONGODB_URI - running in DEMO mode with sample data.")
-    STATE["queue"] = [_to_view(d) for d in docs]
+    STATE["all"] = [_to_view(d) for d in docs]
 
 
 def _find(tx_id):
-    return next((t for t in STATE["queue"] if t["id"] == tx_id), None)
+    return next((t for t in STATE["all"] if t["id"] == tx_id), None)
+
+
+def _visible():
+    return [t for t in STATE["all"] if t["mission"] == STATE["mission"]]
+
+
+def _mission_counts():
+    counts = {m: 0 for m in MISSIONS}
+    for t in STATE["all"]:
+        if t["mission"] in counts:
+            counts[t["mission"]] += 1
+    return counts
 
 
 def _light(t):
-    keys = ("id", "beneficiary", "accountCode", "accountName", "description",
+    keys = ("id", "mission", "beneficiary", "accountCode", "accountName", "description",
             "amount", "currency", "method", "recordedAt")
     out = {k: t[k] for k in keys}
     out["hasReceipt"] = bool(t["receiptImage"])
@@ -108,9 +127,21 @@ def index():
 def api_state():
     return jsonify({
         "period": STATE["period"],
+        "mission": STATE["mission"],
+        "counts": _mission_counts(),
         "cloud": cloud.is_cloud(),
-        "queue": [_light(t) for t in STATE["queue"]],
+        "queue": [_light(t) for t in _visible()],
     })
+
+
+@app.route("/api/mission", methods=["POST"])
+def api_mission():
+    m = (request.json or {}).get("mission", "")
+    if m not in MISSIONS:
+        return jsonify({"error": "mission must be east or south"}), 400
+    STATE["mission"] = m
+    return jsonify({"mission": m, "counts": _mission_counts(),
+                    "queue": [_light(t) for t in _visible()]})
 
 
 @app.route("/api/period", methods=["POST"])
@@ -151,6 +182,8 @@ def api_edit(tx_id):
     for k in ("beneficiary", "accountCode", "accountName", "description", "method"):
         if k in data:
             t[k] = data[k]
+    if data.get("mission") in MISSIONS:
+        t["mission"] = data["mission"]
     if "amount" in data:
         try:
             t["amount"] = int(data["amount"])
@@ -180,7 +213,7 @@ def api_approve(tx_id):
     except Exception as e:  # never block the local record on a cloud hiccup
         app.logger.warning("cloud mark_logged failed: %s", e)
     # 4) drop from queue
-    STATE["queue"] = [x for x in STATE["queue"] if x["id"] != t["id"]]
+    STATE["all"] = [x for x in STATE["all"] if x["id"] != t["id"]]
     return jsonify({"ok": True, "rollover": rollover})
 
 
@@ -193,7 +226,7 @@ def api_delete(tx_id):
         cloud.delete_tx(t["id"])
     except Exception as e:
         app.logger.warning("cloud delete failed: %s", e)
-    STATE["queue"] = [x for x in STATE["queue"] if x["id"] != t["id"]]
+    STATE["all"] = [x for x in STATE["all"] if x["id"] != t["id"]]
     return jsonify({"ok": True})
 
 
@@ -238,8 +271,9 @@ def main():
     storage.init_db()
     load_queue()
     port = int(os.environ.get("PORT", "5000"))
-    n = len(STATE["queue"])
-    print(f"\n  Petty Cash review: {n} unlogged transaction(s). "
+    counts = _mission_counts()
+    print(f"\n  Working Fund review: {len(STATE['all'])} unlogged "
+          f"(East {counts['east']}, South {counts['south']}). "
           f"{'(DEMO data)' if not cloud.is_cloud() else ''}")
     print(f"  Open http://127.0.0.1:{port}/  (a browser tab should open automatically)\n")
     threading.Timer(1.0, _open_browser, args=(port,)).start()

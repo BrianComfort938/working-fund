@@ -17,6 +17,7 @@ node_modules/
 local/receipts/
 local/transaction-backup.csv
 local/printed-batches/
+local/workingfund.db
 local/pettycash.db
 local/.env
 

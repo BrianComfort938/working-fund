@@ -30,7 +30,20 @@ header {
 }
 .badge.demo { background: #78350f; color: #fde68a; }
 .badge.cloud { background: #064e3b; color: #6ee7b7; }
-.period { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.mission-switch { margin-left: auto; display: flex; gap: 6px; }
+.mission-tab {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--bg); color: var(--text); border: 2px solid var(--border);
+  border-radius: 8px; padding: 7px 12px; font-size: 14px; font-weight: 600; cursor: pointer;
+}
+.mission-tab .cnt {
+  background: var(--surface-2); color: var(--muted); border-radius: 999px;
+  padding: 0 7px; font-size: 12px; min-width: 20px; text-align: center;
+}
+.mission-tab[aria-pressed="true"][data-mission="east"]  { border-color: #38bdf8; background: #38bdf822; }
+.mission-tab[aria-pressed="true"][data-mission="south"] { border-color: #f472b6; background: #f472b622; }
+
+.period { margin-left: 18px; display: flex; align-items: center; gap: 8px; }
 .period label { color: var(--muted); font-size: 13px; }
 .period input {
   width: 70px; text-align: center; font-size: 18px; letter-spacing: 3px;
@@ -54,6 +67,12 @@ main {
 .card .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
 .card .who { font-size: 22px; font-weight: 700; }
 .card .when { font-size: 13px; color: var(--muted); margin-top: 2px; }
+.mission-pill {
+  display: inline-block; font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .5px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--border);
+}
+.mission-pill.east  { background: #38bdf822; border-color: #38bdf8; color: #7dd3fc; }
+.mission-pill.south { background: #f472b622; border-color: #f472b6; color: #f9a8d4; }
 .amount { font-size: 30px; font-weight: 800; }
 .amount.neg { color: #fca5a5; }
 .account-chip {

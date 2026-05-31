@@ -64,8 +64,20 @@ main {
   gap: 14px;
 }
 
+/* Mission selector */
+.mission-card { gap: 8px; }
+.mission-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.mission-btn {
+  padding: 14px 4px; border-radius: 12px; cursor: pointer;
+  background: var(--bg); color: var(--text);
+  border: 2px solid var(--border); font-size: 16px; font-weight: 600;
+}
+.mission-btn[aria-pressed="true"][data-mission="east"]  { border-color: #38bdf8; background: #38bdf822; }
+.mission-btn[aria-pressed="true"][data-mission="south"] { border-color: #f472b6; background: #f472b622; }
+
 /* Wave card */
 .wave-card { gap: 6px; }
+.wave-label em { color: #38bdf8; font-style: normal; font-size: 13px; }
 .wave-head { display: flex; align-items: center; justify-content: space-between; }
 .wave-label { color: var(--muted); font-size: 14px; }
 .wave-amount { font-size: 28px; font-weight: 700; color: #38bdf8; }

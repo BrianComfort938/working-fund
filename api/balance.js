@@ -1,12 +1,15 @@
 // /api/balance
-//   GET -> { wave: number|null }
-//   PUT -> body { wave: number }, stores the absolute Wave balance
-// The phone computes the new balance after a Wave payment and PUTs it here, so
-// this endpoint is deliberately a simple store (single-user, no double-counting).
+//   GET ?mission=east|south -> { wave: number|null, mission }
+//   PUT body { wave: number, mission } -> stores the absolute Wave balance
+// The Wave balance is kept PER MISSION (east and south are separate funds), so
+// each mission has its own document in system_settings. The phone computes the
+// new balance after a Wave payment and PUTs it here (single-user, no double-count).
 const { getDb } = require("./_lib/db");
 const { withCors, readBody } = require("./_lib/cors");
 
-const DOC_ID = "wave_balance";
+function docId(mission) {
+  return "wave_balance_" + (mission === "south" ? "south" : "east");
+}
 
 module.exports = async (req, res) => {
   if (withCors(req, res)) return;
@@ -17,18 +20,20 @@ module.exports = async (req, res) => {
     if (req.method === "PUT") {
       const body = readBody(req);
       const wave = Number(body.wave);
+      const mission = body.mission === "south" ? "south" : "east";
       if (Number.isNaN(wave)) return res.status(400).json({ error: "wave must be a number" });
       await col.updateOne(
-        { _id: DOC_ID },
-        { $set: { value: wave, updatedAt: new Date() } },
+        { _id: docId(mission) },
+        { $set: { value: wave, mission, updatedAt: new Date() } },
         { upsert: true }
       );
-      return res.json({ wave });
+      return res.json({ wave, mission });
     }
 
     if (req.method === "GET") {
-      const doc = await col.findOne({ _id: DOC_ID });
-      return res.json({ wave: doc ? doc.value : null });
+      const mission = (req.query && req.query.mission === "south") ? "south" : "east";
+      const doc = await col.findOne({ _id: docId(mission) });
+      return res.json({ wave: doc ? doc.value : null, mission });
     }
 
     res.setHeader("Allow", "GET, PUT, OPTIONS");

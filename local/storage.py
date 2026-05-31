@@ -8,13 +8,13 @@ from datetime import datetime
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 CSV_PATH = os.path.join(BASE, "transaction-backup.csv")
-DB_PATH = os.path.join(BASE, "pettycash.db")
+DB_PATH = os.path.join(BASE, "workingfund.db")
 RECEIPTS_DIR = os.path.join(BASE, "receipts")
 BATCH_DIR = os.path.join(BASE, "printed-batches")
 MAX_CSV_ROWS = 100
 
 CSV_FIELDS = [
-    "recorded_at", "fund_period", "beneficiary", "account_code", "account_name",
+    "recorded_at", "mission", "fund_period", "beneficiary", "account_code", "account_name",
     "description", "amount", "currency", "method", "transaction_id",
 ]
 
@@ -30,7 +30,7 @@ def init_db():
     con.execute(
         """CREATE TABLE IF NOT EXISTS transactions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            recorded_at TEXT, fund_period TEXT, beneficiary TEXT,
+            recorded_at TEXT, mission TEXT, fund_period TEXT, beneficiary TEXT,
             account_code TEXT, account_name TEXT, description TEXT,
             amount INTEGER, currency TEXT, method TEXT,
             transaction_id TEXT, logged_at TEXT)"""
@@ -42,6 +42,7 @@ def init_db():
 def _row_from_tx(tx, fund_period):
     return {
         "recorded_at": tx.get("recordedAt") or "",
+        "mission": tx.get("mission", ""),
         "fund_period": fund_period,
         "beneficiary": tx.get("beneficiary", ""),
         "account_code": tx.get("accountCode", ""),
@@ -60,12 +61,12 @@ def write_sqlite(tx, fund_period):
     con = sqlite3.connect(DB_PATH)
     con.execute(
         """INSERT INTO transactions
-           (recorded_at,fund_period,beneficiary,account_code,account_name,
+           (recorded_at,mission,fund_period,beneficiary,account_code,account_name,
             description,amount,currency,method,transaction_id,logged_at)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
-        (row["recorded_at"], row["fund_period"], row["beneficiary"], row["account_code"],
-         row["account_name"], row["description"], row["amount"], row["currency"],
-         row["method"], row["transaction_id"], datetime.now().isoformat()),
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+        (row["recorded_at"], row["mission"], row["fund_period"], row["beneficiary"],
+         row["account_code"], row["account_name"], row["description"], row["amount"],
+         row["currency"], row["method"], row["transaction_id"], datetime.now().isoformat()),
     )
     con.commit()
     con.close()

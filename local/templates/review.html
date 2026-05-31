@@ -4,15 +4,19 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Petty Cash — Review</title>
+  <title>Working Fund — Review</title>
   <link rel="stylesheet" href="/static/review.css">
 </head>
 
 <body>
   <header>
     <div class="brand">
-      <strong>Petty Cash</strong><span class="muted"> · Review</span>
+      <strong>Working Fund</strong><span class="muted"> · Review</span>
       <span id="mode" class="badge"></span>
+    </div>
+    <div class="mission-switch" id="missionSwitch">
+      <button type="button" class="mission-tab" data-mission="east">East <span class="cnt" id="cntEast">0</span></button>
+      <button type="button" class="mission-tab" data-mission="south">South <span class="cnt" id="cntSouth">0</span></button>
     </div>
     <div class="period">
       <label for="period">Fund period</label>
@@ -35,6 +39,7 @@
           <li><kbd>A</kbd> approve &amp; print</li>
           <li><kbd>E</kbd> edit</li>
           <li><kbd>D</kbd> delete</li>
+          <li><kbd>M</kbd> switch mission</li>
           <li><kbd>←</kbd> <kbd>→</kbd> prev / next</li>
           <li><kbd>Enter</kbd> save · <kbd>Esc</kbd> cancel</li>
           <li><kbd>[</kbd> <kbd>]</kbd> calendar month</li>

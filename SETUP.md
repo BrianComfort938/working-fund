@@ -17,8 +17,10 @@ Three free services, no credit card needed:
    ```
    Replace `PASSWORD` with the real one.
 
-> The database (`pettycash`) and collections (`transactions`, `system_settings`)
+> The database (`workingfund`) and collections (`transactions`, `system_settings`)
 > are created automatically on the first write — nothing to set up by hand.
+> Each transaction carries a `mission` field (`east` or `south`); the Wave balance
+> is stored per mission.
 
 ---
 
@@ -38,7 +40,7 @@ set up git and the first commit for you.)
    | Name             | Value                                                | Required |
    |------------------|------------------------------------------------------|----------|
    | `MONGODB_URI`    | your Atlas connection string (the secret)            | yes      |
-   | `MONGODB_DB`     | `pettycash`                                           | optional |
+   | `MONGODB_DB`     | `workingfund`                                         | optional |
    | `ALLOWED_ORIGIN` | your Pages URL, e.g. `https://USERNAME.github.io`    | optional |
 
 4. **Deploy.** Your API base becomes `https://YOUR-PROJECT.vercel.app/api`.
@@ -67,7 +69,7 @@ The header should change from "Offline mode" to **"Cloud connected"**.
 - ✅ Your **database password lives only in Vercel's environment variables** — never
   in the public GitHub Pages code. This is the important one, and it's handled.
 - ⚠️ The API endpoints themselves are currently **open** (anyone who discovers the
-  URL could read/add records). For a personal petty-cash fund behind an obscure
+  URL could read/add records). For a personal working fund behind an obscure
   HTTPS URL this is usually acceptable.
 - 🔒 When you want to lock writes behind a password, say so — I'll add a `WRITE_KEY`
   check to the API and a matching key field in the portal's ⚙️ settings.

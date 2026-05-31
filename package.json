@@ -1,8 +1,8 @@
 {
-  "name": "pettycash-api",
+  "name": "workingfund-api",
   "version": "1.0.0",
   "private": true,
-  "description": "Secure API layer (Vercel serverless functions) for the petty cash app",
+  "description": "Secure API layer (Vercel serverless functions) for the Working Fund app",
   "dependencies": {
     "mongodb": "^6.5.0"
   }

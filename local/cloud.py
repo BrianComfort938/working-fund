@@ -21,7 +21,7 @@ def _connect():
     if MongoClient is None:
         raise RuntimeError("pymongo is not installed. Run: pip install -r requirements.txt")
     if _collection is None:
-        db_name = os.environ.get("MONGODB_DB", "pettycash")
+        db_name = os.environ.get("MONGODB_DB", "workingfund")
         _collection = MongoClient(uri)[db_name]["transactions"]
     return _collection
 
@@ -30,12 +30,16 @@ def is_cloud():
     return bool(os.environ.get("MONGODB_URI")) and MongoClient is not None
 
 
-def fetch_unlogged():
-    """Return list of unlogged docs, or None if no cloud is configured (demo)."""
+def fetch_unlogged(mission=None):
+    """Return list of unlogged docs (optionally filtered to one mission), or None
+    if no cloud is configured (demo)."""
     col = _connect()
     if col is None:
         return None
-    return list(col.find({"logged": {"$ne": True}}).sort("createdAt", 1))
+    query = {"logged": {"$ne": True}}
+    if mission in ("east", "south"):
+        query["mission"] = mission
+    return list(col.find(query).sort("createdAt", 1))
 
 
 def mark_logged(tx_id, fund_period):

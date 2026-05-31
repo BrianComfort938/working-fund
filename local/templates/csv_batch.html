@@ -67,6 +67,7 @@
         <tr>
             <th>#</th>
             <th>Recorded</th>
+            <th>Mission</th>
             <th>Period</th>
             <th>Beneficiary</th>
             <th>Account</th>
@@ -78,6 +79,7 @@
         <tr>
             <td>{{ loop.index }}</td>
             <td>{{ r.recorded_at[:16] }}</td>
+            <td>{{ r.mission }}</td>
             <td>{{ r.fund_period }}</td>
             <td>{{ r.beneficiary }}</td>
             <td>{{ r.account_name }}</td>

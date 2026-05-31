@@ -45,14 +45,16 @@
   const seriesKey   = (name) => (name || "").slice(0, 3);
   const seriesColor = (name) => (SERIES_META[seriesKey(name)] || {}).color || "#94a3b8";
 
-  const cfg = window.PETTYCASH_CONFIG || {};
+  const cfg = window.WORKINGFUND_CONFIG || {};
   const CURRENCY = cfg.CURRENCY || "XOF";
+  const MISSIONS = ["east", "south"];
+  const titleCase = (m) => (m === "south" ? "South" : "East");
 
   // ---- helpers ----
   const $ = (id) => document.getElementById(id);
   const groupDigits = (s) => String(s).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   const apiBase = () =>
-    (localStorage.getItem("pettycash_api_base") || cfg.API_BASE_URL || "").replace(/\/$/, "");
+    (localStorage.getItem("workingfund_api_base") || cfg.API_BASE_URL || "").replace(/\/$/, "");
 
   // ---- state ----
   let amountSign = 1;          // +1 or -1
@@ -60,6 +62,35 @@
   let method = "";             // "cash" | "wave" | "orange"
   let receiptImage = "";       // compressed dataURL
   let waveReceiptImage = "";
+  let mission = "";            // "east" | "south"
+
+  // Per-mission localStorage keys (so each mission keeps its own outbox/balance).
+  const balanceKey = (m) => "workingfund_wave_balance_" + (m || mission);
+  const outboxKey  = (m) => "workingfund_outbox_" + (m || mission);
+
+  // =========================================================================
+  // Mission selection (remembered per device)
+  // =========================================================================
+  function currentMission() {
+    const saved = localStorage.getItem("workingfund_mission");
+    if (MISSIONS.indexOf(saved) !== -1) return saved;
+    return MISSIONS.indexOf(cfg.DEFAULT_MISSION) !== -1 ? cfg.DEFAULT_MISSION : "east";
+  }
+  function wireMission() {
+    document.querySelectorAll(".mission-btn").forEach((b) => {
+      b.addEventListener("click", () => setMission(b.dataset.mission));
+    });
+  }
+  function setMission(m) {
+    if (MISSIONS.indexOf(m) === -1) m = "east";
+    mission = m;
+    localStorage.setItem("workingfund_mission", m);
+    document.querySelectorAll(".mission-btn").forEach((x) =>
+      x.setAttribute("aria-pressed", String(x.dataset.mission === m)));
+    $("waveMissionTag").textContent = "(" + titleCase(m) + ")";
+    loadWaveBalance();   // each mission has its own Wave balance
+    renderOutbox();      // each mission has its own offline queue
+  }
 
   // =========================================================================
   // Account dropdown (grouped + color chip)
@@ -200,19 +231,19 @@
   }
 
   // =========================================================================
-  // Wave balance
+  // Wave balance (per mission)
   // =========================================================================
   async function loadWaveBalance() {
     const base = apiBase();
     let val = null;
     if (base) {
       try {
-        const r = await fetch(base + "/balance");
+        const r = await fetch(base + "/balance?mission=" + encodeURIComponent(mission));
         if (r.ok) { const j = await r.json(); val = j.wave; }
       } catch (_) { /* fall through to local */ }
     }
     if (val == null) {
-      const local = localStorage.getItem("pettycash_wave_balance");
+      const local = localStorage.getItem(balanceKey());
       val = local == null ? null : parseInt(local, 10);
     }
     renderWaveBalance(val);
@@ -226,7 +257,7 @@
     return t ? parseInt(t, 10) : 0;
   }
   async function saveWaveBalance(val) {
-    localStorage.setItem("pettycash_wave_balance", String(val));
+    localStorage.setItem(balanceKey(), String(val));
     renderWaveBalance(val);
     const base = apiBase();
     if (base) {
@@ -234,7 +265,7 @@
         await fetch(base + "/balance", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ wave: val })
+          body: JSON.stringify({ wave: val, mission })
         });
       } catch (_) { /* stays local until next sync */ }
     }
@@ -255,14 +286,14 @@
   }
 
   // =========================================================================
-  // Submit + offline outbox
+  // Submit + offline outbox (per mission)
   // =========================================================================
-  function loadOutbox() {
-    try { return JSON.parse(localStorage.getItem("pettycash_outbox") || "[]"); }
+  function loadOutbox(m) {
+    try { return JSON.parse(localStorage.getItem(outboxKey(m)) || "[]"); }
     catch (_) { return []; }
   }
-  function saveOutbox(arr) {
-    localStorage.setItem("pettycash_outbox", JSON.stringify(arr));
+  function saveOutbox(arr, m) {
+    localStorage.setItem(outboxKey(m), JSON.stringify(arr));
     renderOutbox();
   }
   function renderOutbox() {
@@ -270,7 +301,7 @@
     const box = $("outbox");
     if (n === 0) { box.classList.add("hidden"); return; }
     $("outboxText").textContent =
-      `${n} transaction${n > 1 ? "s" : ""} waiting to sync`;
+      `${n} ${titleCase(mission)} transaction${n > 1 ? "s" : ""} waiting to sync`;
     box.classList.remove("hidden");
   }
 
@@ -301,6 +332,7 @@
   }
 
   function validate() {
+    if (!mission) return "Choose a mission";
     if (!$("beneficiary").value.trim()) return "Enter a beneficiary";
     if (!$("account").value) return "Choose an account";
     if (amountValue() === 0) return "Enter an amount";
@@ -329,6 +361,7 @@
 
       const accountCode = $("account").value;
       const tx = {
+        mission,
         beneficiary: $("beneficiary").value.trim(),
         accountCode,
         accountName: ACCOUNT_CODES[accountCode],
@@ -346,7 +379,7 @@
       btn.disabled = true; btn.textContent = "Saving…";
       try {
         await postTransaction(tx);
-        toast("Saved to cloud", "ok");
+        toast(`Saved to cloud (${titleCase(mission)})`, "ok");
       } catch (_) {
         const ob = loadOutbox(); ob.push(tx); saveOutbox(ob);
         toast("Saved offline — will sync later", "ok");
@@ -368,14 +401,14 @@
   function wireSettings() {
     const modal = $("settingsModal");
     $("settingsBtn").addEventListener("click", () => {
-      $("apiUrlInput").value = localStorage.getItem("pettycash_api_base") || cfg.API_BASE_URL || "";
+      $("apiUrlInput").value = localStorage.getItem("workingfund_api_base") || cfg.API_BASE_URL || "";
       modal.classList.remove("hidden");
     });
     $("closeSettings").addEventListener("click", () => modal.classList.add("hidden"));
     $("saveSettings").addEventListener("click", () => {
       const v = $("apiUrlInput").value.trim();
-      if (v) localStorage.setItem("pettycash_api_base", v);
-      else localStorage.removeItem("pettycash_api_base");
+      if (v) localStorage.setItem("workingfund_api_base", v);
+      else localStorage.removeItem("workingfund_api_base");
       modal.classList.add("hidden");
       refreshConnState();
       loadWaveBalance();
@@ -403,6 +436,7 @@
     buildAccountSelect();
     wireAmount();
     wireMethods();
+    wireMission();
     wirePhoto([$("receiptCam"), $("receiptGal")], "receiptPreview", (v) => { receiptImage = v; });
     wirePhoto([$("waveCam"), $("waveGal")], "wavePreview", (v) => { waveReceiptImage = v; });
     wireWave();
@@ -410,8 +444,7 @@
     wireSettings();
     renderAmount();
     refreshConnState();
-    renderOutbox();
-    loadWaveBalance();
+    setMission(currentMission()); // also loads this mission's balance + outbox
     if (apiBase()) syncOutbox(true); // quietly flush queue on load when online
   });
 })();
