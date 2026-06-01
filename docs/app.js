@@ -66,8 +66,11 @@
   // ---- helpers ----
   const $ = (id) => document.getElementById(id);
   const groupDigits = (s) => String(s).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  const apiBase = () =>
-    (localStorage.getItem("workingfund_api_base") || cfg.API_BASE_URL || "").replace(/\/$/, "");
+  // Fixed backend URL from config.js — not user-changeable. Any old per-device
+  // override is intentionally ignored (and cleared) so a stale/bad saved URL
+  // can never shadow the correct one.
+  localStorage.removeItem("workingfund_api_base");
+  const apiBase = () => (cfg.API_BASE_URL || "").replace(/\/$/, "");
 
   // ---- state ----
   let amountSign = 1;
@@ -624,28 +627,6 @@
     $("syncBtn").addEventListener("click", () => syncOutbox(false));
   }
 
-  // =========================================================================
-  // Settings + connection
-  // =========================================================================
-  function wireSettings() {
-    const modal = $("settingsModal");
-    $("settingsBtn").addEventListener("click", () => {
-      $("apiUrlInput").value = localStorage.getItem("workingfund_api_base") || cfg.API_BASE_URL || "";
-      modal.classList.remove("hidden");
-    });
-    $("closeSettings").addEventListener("click", () => modal.classList.add("hidden"));
-    $("saveSettings").addEventListener("click", () => {
-      const v = $("apiUrlInput").value.trim();
-      if (v) localStorage.setItem("workingfund_api_base", v); else localStorage.removeItem("workingfund_api_base");
-      modal.classList.add("hidden"); refreshConnState(); loadWaveBalance(); toast("Settings saved", "ok");
-    });
-  }
-  function refreshConnState() {
-    const el = $("connState");
-    if (apiBase()) { el.innerHTML = '<span class="dot"></span>Connected'; el.className = "conn-state online"; }
-    else { el.innerHTML = '<span class="dot"></span>Offline'; el.className = "conn-state offline"; }
-  }
-
   // ---- misc ----
   function escapeHtml(s) {
     return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -669,10 +650,8 @@
     wireSignature();
     wireWave();
     wireSubmit();
-    wireSettings();
     renderAmount();
     renderSignaturePreview();
-    refreshConnState();
     setMission(currentMission());  // loads balance + outbox + recent for the mission
     if (apiBase()) syncOutbox(true);
   });

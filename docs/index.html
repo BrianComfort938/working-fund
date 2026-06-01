@@ -10,23 +10,6 @@
 </head>
 
 <body>
-  <header class="app-header">
-    <div class="brand">
-      <div class="brand-mark">WF</div>
-      <div class="brand-text">
-        <div id="connState" class="conn-state offline"><span class="dot"></span>Offline</div>
-      </div>
-    </div>
-    <button id="settingsBtn" class="icon-btn" aria-label="Settings" title="Settings">
-      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"
-        stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="3"></circle>
-        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z">
-        </path>
-      </svg>
-    </button>
-  </header>
-
   <main>
     <!-- Mission -->
     <section class="card">
@@ -165,24 +148,6 @@
   </main>
 
   <div id="toast" class="toast hidden"></div>
-
-  <!-- Settings modal -->
-  <div id="settingsModal" class="modal hidden">
-    <div class="modal-card">
-      <div class="modal-head"><h2>Settings</h2></div>
-      <label class="field">
-        <span class="field-label">Backend API URL</span>
-        <input id="apiUrlInput" type="url" placeholder="https://your-app.vercel.app/api">
-      </label>
-      <p class="hint">Leave empty to stay in offline mode. Submissions queue on this
-        device until a backend is set and reachable.</p>
-      <div class="modal-actions">
-        <span class="spacer"></span>
-        <button id="closeSettings" class="btn">Close</button>
-        <button id="saveSettings" class="btn primary">Save</button>
-      </div>
-    </div>
-  </div>
 
   <!-- Preset add / manage modal -->
   <div id="presetModal" class="modal hidden">

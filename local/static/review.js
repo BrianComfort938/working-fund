@@ -78,9 +78,6 @@
     state.cloud = s.cloud;
     state.counts = s.counts || { east: 0, south: 0 };
     $("period").value = s.period;
-    const mode = $("mode");
-    mode.textContent = s.cloud ? "cloud" : "demo data";
-    mode.className = "badge " + (s.cloud ? "cloud" : "demo");
     const saved = localStorage.getItem("workingfund_mission");
     const wanted = MISSIONS.indexOf(saved) !== -1 ? saved : s.mission;
     if (wanted === s.mission) { state.mission = s.mission; state.queue = s.queue; }
