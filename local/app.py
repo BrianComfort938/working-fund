@@ -106,6 +106,20 @@ def load_queue():
     STATE["all"] = [_to_view(d) for d in docs]
 
 
+def reload_queue():
+    """Re-fetch from the cloud and rebuild the queue so a browser reload sees the
+    most recent transactions (previously this only happened at server startup, so
+    new submissions required a restart). Transactions already approved/deleted in
+    this session live in STATE['handled'] and are kept out of the rebuilt queue.
+    Returns True on a real cloud refresh, False in demo mode."""
+    docs = cloud.fetch_all()
+    if docs is None:
+        return False  # demo mode: keep the sample queue as-is
+    handled = STATE["handled"]
+    STATE["all"] = [v for v in (_to_view(d) for d in docs) if v["id"] not in handled]
+    return True
+
+
 def _find(tx_id):
     return next((t for t in STATE["all"] if t["id"] == tx_id), None)
 
@@ -191,6 +205,13 @@ def index():
 
 @app.route("/api/state")
 def api_state():
+    # Refresh from the cloud on every load so a browser reload shows the latest
+    # transactions (no server restart needed). A transient failure just keeps the
+    # current in-memory queue.
+    try:
+        reload_queue()
+    except Exception as e:
+        app.logger.warning("cloud refresh failed: %s", e)
     return jsonify({
         "period": STATE["period"],
         "mission": STATE["mission"],

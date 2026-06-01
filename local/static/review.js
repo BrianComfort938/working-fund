@@ -129,8 +129,51 @@
     const reviewing = state.view === "review";
     $("reviewView").classList.toggle("hidden", !reviewing);
     $("historyView").classList.toggle("hidden", reviewing);
-    if (reviewing) { renderReview(); renderCalendar(); renderLocation(); }
+    if (reviewing) { renderReview(); renderCalendar(); renderLocation(); renderTimeBanner(); }
     else renderHistory();
+  }
+
+  // ---- left timeline banner: recorded time on the sector day (9:00 - 18:30) ----
+  const SECTOR_START_MIN = 9 * 60;        // 09:00
+  const SECTOR_END_MIN = 18 * 60 + 30;    // 18:30
+  // Notable marks shown on the rail.
+  const SECTOR_MARKS = [
+    { min: 9 * 60, label: "9:00", note: "Sector start" },
+    { min: 12 * 60, label: "12:00" },
+    { min: 14 * 60, label: "14:00" },
+    { min: 18 * 60 + 30, label: "18:30", note: "Sector end" },
+  ];
+  function renderTimeBanner() {
+    const el = $("timeBanner");
+    if (!el) return;
+    const t = cur();
+    const d = t && t.recordedAt ? new Date(t.recordedAt) : null;
+    const hasTime = d && !isNaN(d);
+    const span = SECTOR_END_MIN - SECTOR_START_MIN;
+
+    // Tick marks + labels along the rail.
+    let marks = SECTOR_MARKS.map((m) => {
+      const pct = Math.max(0, Math.min(100, ((m.min - SECTOR_START_MIN) / span) * 100));
+      return `<div class="tl-mark" style="top:${pct}%">` +
+        `<span class="tl-tick"></span>` +
+        `<span class="tl-label">${m.label}${m.note ? `<em>${m.note}</em>` : ""}</span></div>`;
+    }).join("");
+
+    let marker = "", header = `<div class="tl-head">No time</div>`;
+    if (hasTime) {
+      const mins = d.getHours() * 60 + d.getMinutes();
+      const clamped = Math.max(SECTOR_START_MIN, Math.min(SECTOR_END_MIN, mins));
+      const pct = ((clamped - SECTOR_START_MIN) / span) * 100;
+      const hh = String(d.getHours()).padStart(2, "0");
+      const mm = String(d.getMinutes()).padStart(2, "0");
+      const outside = mins < SECTOR_START_MIN || mins > SECTOR_END_MIN;
+      header = `<div class="tl-head">${hh}:${mm}${outside ? '<span class="tl-out">outside</span>' : ""}</div>`;
+      marker = `<div class="tl-now" style="top:${pct}%" title="Recorded ${hh}:${mm}">` +
+        `<span class="tl-dot"></span></div>`;
+    }
+
+    el.innerHTML = header +
+      `<div class="tl-rail"><div class="tl-line"></div>${marks}${marker}</div>`;
   }
 
   // ---- live location map (OpenStreetMap embed) for the current transaction ----
