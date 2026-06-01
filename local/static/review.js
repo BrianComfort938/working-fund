@@ -153,6 +153,12 @@
     if (!w.length) return "";
     return w.length > words ? w.slice(0, words).join(" ") + "…" : w.join(" ");
   }
+  // Sentence case: first letter capital, the rest lowercased.
+  function sentenceCase(text) {
+    const s = String(text || "").trim();
+    if (!s) return "";
+    return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+  }
 
   function renderTimeBanner() {
     const el = $("timeBanner");
@@ -169,7 +175,9 @@
       .filter((o) => o.mins != null && new Date(o.x.recordedAt).toDateString() === dayKey)
       .sort((a, b) => a.mins - b.mins);
 
-    const header = `<div class="tl-head">${esc(refD.toLocaleDateString(undefined, { month: "short", day: "numeric" }))}` +
+    // Recorded date/time of the current transaction (moved here from the form).
+    const recordedLabel = t && t.recordedAt ? fmtWhen(t.recordedAt) : "No date";
+    const header = `<div class="tl-head"><span class="tl-recorded">${esc(recordedLabel)}</span>` +
       `<span class="tl-sub">${dayTx.length} transaction${dayTx.length === 1 ? "" : "s"}</span></div>`;
 
     // Notable-time marks: tick on the line + label to the right of it.
@@ -183,8 +191,8 @@
     const dots = dayTx.map((o) => {
       const pct = (o.mins / DAY_MIN) * 100;
       const isCur = o.i === state.idx;
-      const name = clip(o.x.beneficiary, 4) || "(no name)";
-      const desc = clip(o.x.description, 6);
+      const name = sentenceCase(clip(o.x.beneficiary, 4)) || "(no name)";
+      const desc = sentenceCase(clip(o.x.description, 6));
       return `<div class="tl-tx${isCur ? " current" : ""}" style="top:${pct}%" data-idx="${o.i}" title="${esc(hhmm(o.mins))} — ${esc(o.x.beneficiary || "")}">` +
         `<span class="tl-box"><span class="tl-box-name">${esc(name)}</span>` +
         (desc ? `<span class="tl-box-desc">${esc(desc)}</span>` : "") + `</span>` +
@@ -272,6 +280,11 @@
     if (t.hasSignature) media += `<figure><figcaption>Signature</figcaption><canvas class="sig-box" id="sigCv" width="230" height="86"></canvas></figure>`;
     if (!media) media = `<span class="none">No receipts or signature attached</span>`;
 
+    // Normalize text entries to sentence case (first letter capital) for display
+    // and for the saved record.
+    t.beneficiary = sentenceCase(t.beneficiary);
+    t.description = sentenceCase(t.description);
+
     wrap.innerHTML = `
       <div class="rec-field">
         <label>Beneficiary</label>
@@ -300,10 +313,6 @@
           <button type="button" id="f_sign" class="sign-btn ${neg ? "neg" : ""}">${neg ? "−" : "+"}</button>
           <input id="f_amt" inputmode="numeric" value="${groupDigits(Math.abs(t.amount))}">
         </div>
-      </div>
-      <div class="rec-field">
-        <label>Recorded</label>
-        <div class="rec-value">${fmtWhen(t.recordedAt)} &middot; <span class="mission-pill ${t.mission}">${titleCase(t.mission)}</span></div>
       </div>
       <div class="rec-field">
         <label>Attachments</label>

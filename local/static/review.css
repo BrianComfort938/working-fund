@@ -60,13 +60,13 @@ html, body { margin: 0; background: var(--bg); color: var(--text); font-family: 
 .mission-tab[aria-pressed="true"] .cnt { background: var(--blue-dark); color: #cfe7f1; }
 
 main#reviewView {
-  display: grid; grid-template-columns: 168px 1fr 330px; gap: 16px;
-  max-width: 1288px; margin: 16px auto; padding: 18px;
+  display: grid; grid-template-columns: 200px 1fr 330px; gap: 16px;
+  max-width: 1320px; margin: 16px auto; padding: 18px;
 }
 main#historyView {
   max-width: 1120px; margin: 16px auto; padding: 18px;
 }
-@media (max-width: 1040px) { main#reviewView { grid-template-columns: 168px 1fr; } }
+@media (max-width: 1060px) { main#reviewView { grid-template-columns: 200px 1fr; } }
 @media (max-width: 760px) { main#reviewView { grid-template-columns: 1fr; } }
 
 /* Left timeline banner — recorded time on the sector day (9:00 to 18:30) */
@@ -78,24 +78,25 @@ main#historyView {
   width: 100%; display: flex; flex-direction: column; align-items: stretch;
 }
 .tl-head {
-  font-family: var(--sans); font-size: 13px; font-weight: 700; color: var(--text);
-  text-align: right; margin-bottom: 14px; line-height: 1.2; width: 100%; padding-right: 18px;
+  margin-bottom: 14px; width: 100%; padding: 0 14px 12px;
+  border-bottom: 1px solid var(--border); text-align: left;
 }
-.tl-head .tl-sub { display: block; font-size: 10px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
-/* The rail sits 18px from the right edge of the banner; transaction boxes grow
-   leftward from it, notable-time labels sit just to its right. */
+.tl-recorded { display: block; font-family: var(--sans); font-size: 12.5px; font-weight: 700; color: var(--text); line-height: 1.25; }
+.tl-head .tl-sub { display: block; margin-top: 3px; font-size: 10px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+/* The rail sits 48px from the right edge of the banner so notable-time labels
+   fit inside to its right; transaction boxes grow leftward from it. */
 .tl-rail { position: relative; width: 100%; height: 720px; }
 .tl-line {
-  position: absolute; right: 18px; top: 0; bottom: 0; width: 2px;
+  position: absolute; right: 48px; top: 0; bottom: 0; width: 2px;
   background: linear-gradient(180deg, var(--ok), var(--blue) 55%, var(--amber));
   border-radius: 2px;
 }
 /* Notable-time marks: tick on the line, label to its right */
-.tl-mark { position: absolute; right: 18px; transform: translateY(-50%); display: flex; align-items: center; }
+.tl-mark { position: absolute; right: 48px; transform: translateY(-50%); display: flex; align-items: center; }
 .tl-tick { width: 8px; height: 8px; border-radius: 50%; background: var(--border-strong); border: 2px solid var(--panel); transform: translateX(50%); }
-.tl-label { position: absolute; left: 12px; font-family: var(--mono); font-size: 10px; color: var(--muted); white-space: nowrap; }
+.tl-label { position: absolute; left: 10px; font-family: var(--mono); font-size: 10px; color: var(--muted); white-space: nowrap; }
 /* Per-transaction marker: dot on the line, info box to the LEFT */
-.tl-tx { position: absolute; right: 18px; transform: translateY(-50%); display: flex; align-items: center; cursor: pointer; z-index: 2; }
+.tl-tx { position: absolute; right: 48px; transform: translateY(-50%); display: flex; align-items: center; cursor: pointer; z-index: 2; }
 .tl-txdot { width: 11px; height: 11px; border-radius: 50%; background: var(--muted); border: 2px solid var(--panel); transform: translateX(50%); box-shadow: 0 0 0 1px var(--border-strong); }
 .tl-box {
   position: absolute; right: 14px; display: flex; flex-direction: column; gap: 1px;
