@@ -21,7 +21,7 @@
     "41": "600-5700 Vehicle Equipment", "42": "600-5772 Vehicle Maintenance and repairs",
     "50": "900-5102 Travel, Baggage, Visa and Other", "51": "900-5949 Missionary Medical",
   };
-  const ACCOUNT_ORDER = Object.keys(ACCOUNT_CODES);
+  const ACCOUNT_ORDER = Object.keys(ACCOUNT_CODES).sort(); // by code: 00, 01, ... 51
   const SERIES_META = {
     "400": { label: "Field", color: "#2e7d32" },
     "000": { label: "Admin", color: "#00618a" },
