@@ -24,3 +24,6 @@ local/.env
 # OS
 .DS_Store
 Thumbs.db
+
+# Local scheduler lock
+.claude/scheduled_tasks.lock
