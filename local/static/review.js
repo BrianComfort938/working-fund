@@ -372,7 +372,9 @@
     catch (_) { matches = []; }
     // The reviewer may have navigated away while the request was in flight.
     if (!cur() || cur().id !== forId) return;
-    if (!matches.length) { field.classList.add("hidden"); list.innerHTML = ""; return; }
+    // The card sits beside the calendar and stays in place; show a placeholder
+    // (rather than hiding it) when there are no matches.
+    if (!matches.length) { list.innerHTML = `<div class="dup-empty">None found</div>`; return; }
     list.innerHTML = matches.map((m) => {
       const neg = m.amount < 0;
       const amt = (neg ? "-" : "") + groupDigits(Math.abs(m.amount)) + " " + (m.currency || "XOF");
@@ -383,7 +385,6 @@
         `<span class="s-amt">${esc(amt)}</span>` +
         (meta ? `<span class="s-meta">${esc(meta)}</span>` : "") + `</div>`;
     }).join("");
-    field.classList.remove("hidden");
   }
 
   function drawSignature(canvas, sig, pad) {

@@ -30,22 +30,23 @@
       <div id="recForm" class="rec-form"></div>
     </section>
     <aside class="col-side">
-      <div id="calendar" class="calendar"></div>
-
-      <!-- Live location map for the current transaction -->
+      <!-- Live location map for the current transaction (full width, on top) -->
       <div class="loc-card">
         <h3>Location</h3>
         <div id="locMap" class="loc-map"></div>
         <div id="locMeta" class="loc-meta"></div>
       </div>
 
-      <!-- Possible duplicates / similar past entries -->
-      <div class="dup-card hidden" id="similarField">
-        <h3>Possible duplicates</h3>
-        <div id="similarList" class="similar-list"></div>
+      <!-- Calendar and possible duplicates side by side, beneath the map -->
+      <div class="side-row">
+        <div id="calendar" class="calendar"></div>
+        <div class="dup-card" id="similarField">
+          <h3>Possible duplicates</h3>
+          <div id="similarList" class="similar-list"><div class="dup-empty">None found</div></div>
+        </div>
       </div>
 
-      <!-- Settings box (bottom right, under the map) -->
+      <!-- Settings box (bottom) -->
       <button type="button" class="settings-box" id="settingsBtn">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"
           stroke-linecap="round" stroke-linejoin="round">

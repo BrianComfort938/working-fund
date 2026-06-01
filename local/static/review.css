@@ -60,22 +60,29 @@ html, body { margin: 0; background: var(--bg); color: var(--text); font-family: 
 .mission-tab[aria-pressed="true"] .cnt { background: var(--blue-dark); color: #cfe7f1; }
 
 main#reviewView {
-  display: grid; grid-template-columns: 200px 1fr 330px; gap: 16px;
-  max-width: 1320px; margin: 16px auto; padding: 18px;
+  display: grid; grid-template-columns: 200px 1fr 380px; gap: 16px;
+  max-width: 1360px; margin: 0 auto; padding: 14px 18px;
+  /* Fit the whole review view in the viewport so the reviewer never scrolls. */
+  height: 100vh; box-sizing: border-box; overflow: hidden; align-items: start;
 }
+/* Each column manages its own overflow instead of growing the page. */
+main#reviewView > .col-time,
+main#reviewView > .col-main,
+main#reviewView > .col-side { max-height: calc(100vh - 28px); min-height: 0; }
+main#reviewView > .col-main { overflow: auto; }
 main#historyView {
   max-width: 1120px; margin: 16px auto; padding: 18px;
 }
 @media (max-width: 1060px) { main#reviewView { grid-template-columns: 200px 1fr; } }
-@media (max-width: 760px) { main#reviewView { grid-template-columns: 1fr; } }
+@media (max-width: 760px) { main#reviewView { grid-template-columns: 1fr; height: auto; overflow: visible; } }
 
-/* Left timeline banner — recorded time on the sector day (9:00 to 18:30) */
-.col-time { display: flex; }
+/* Left timeline banner — recorded time on the full 24h day */
+.col-time { display: flex; min-height: 0; }
 .time-banner {
-  position: sticky; top: 16px; align-self: flex-start;
   background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
   box-shadow: 0 1px 2px rgba(20, 33, 42, .05); padding: 14px 0 20px;
   width: 100%; display: flex; flex-direction: column; align-items: stretch;
+  max-height: 100%; min-height: 0;
 }
 .tl-head {
   margin-bottom: 14px; width: 100%; padding: 0 14px 12px;
@@ -85,7 +92,7 @@ main#historyView {
 .tl-head .tl-sub { display: block; margin-top: 3px; font-size: 10px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
 /* The rail sits 48px from the right edge of the banner so notable-time labels
    fit inside to its right; transaction boxes grow leftward from it. */
-.tl-rail { position: relative; width: 100%; height: 720px; }
+.tl-rail { position: relative; width: 100%; flex: 1; min-height: 360px; }
 .tl-line {
   position: absolute; right: 48px; top: 0; bottom: 0; width: 2px;
   background: linear-gradient(180deg, var(--ok), var(--blue) 55%, var(--amber));
@@ -114,11 +121,15 @@ main#historyView {
   border-radius: var(--radius); padding: 18px; box-shadow: 0 1px 2px rgba(20, 33, 42, .05);
 }
 
-/* Live location card + map iframe */
-.col-side { display: flex; flex-direction: column; gap: 16px; }
+/* Side column: Location on top, calendar + duplicates side-by-side, settings last */
+.col-side { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.side-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; min-height: 0; flex: 1; }
+.side-row .calendar { margin: 0; }
+.side-row .dup-card { display: flex; flex-direction: column; min-height: 0; }
 .loc-card h3 { margin: 0 0 10px; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.loc-card { padding: 14px; }
 .loc-map {
-  width: 100%; height: 220px; border-radius: var(--radius); overflow: hidden;
+  width: 100%; height: 190px; border-radius: var(--radius); overflow: hidden;
   border: 1px solid var(--border-strong); background: var(--panel-alt);
 }
 .loc-map iframe { width: 100%; height: 100%; border: 0; display: block; }
@@ -187,13 +198,14 @@ a.loc-link:hover { text-decoration: underline; }
 .receipts .sig-box { border: 1px solid var(--border-strong); border-radius: var(--radius); background: #fff; width: 230px; height: 86px; }
 .receipts .none { color: var(--muted); font-size: 13px; }
 
-/* Possible duplicates / similar past entries — clean card in the side column */
+/* Possible duplicates / similar past entries — clean card beside the calendar */
 .dup-card {
   background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 18px; box-shadow: 0 1px 2px rgba(20, 33, 42, .05);
+  padding: 14px; box-shadow: 0 1px 2px rgba(20, 33, 42, .05);
 }
-.dup-card h3 { margin: 0 0 10px; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
-.similar-list { display: flex; flex-direction: column; }
+.dup-card h3 { margin: 0 0 8px; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.similar-list { display: flex; flex-direction: column; overflow: auto; min-height: 0; }
+.dup-empty { color: var(--muted); font-size: 12.5px; padding: 2px 0; }
 .similar-row {
   display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: baseline;
   padding: 8px 0; border-top: 1px solid var(--border);
