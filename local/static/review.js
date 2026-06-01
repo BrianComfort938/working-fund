@@ -119,13 +119,45 @@
       b.setAttribute("aria-pressed", String(b.dataset.mission === state.mission)));
     $("progress").textContent = state.queue.length ? `${state.idx + 1} / ${state.queue.length}` : "0 / 0";
 
+    // Inline indicators that replaced the old banner
+    const mb = $("missionBadge");
+    if (mb) { mb.textContent = titleCase(state.mission); mb.className = "mission-pill " + state.mission; }
+    const pb = $("periodBadge");
+    if (pb) pb.textContent = "WF " + state.period;
+    $("historyBtn").textContent = state.view === "review" ? "History" : "Review";
+
     const reviewing = state.view === "review";
     $("reviewView").classList.toggle("hidden", !reviewing);
     $("historyView").classList.toggle("hidden", reviewing);
-    $("navGroup").style.visibility = reviewing ? "visible" : "hidden";
-    $("historyBtn").textContent = reviewing ? "History" : "Review";
-    if (reviewing) { renderReview(); renderCalendar(); }
+    if (reviewing) { renderReview(); renderCalendar(); renderLocation(); }
     else renderHistory();
+  }
+
+  // ---- live location map (OpenStreetMap embed) for the current transaction ----
+  function renderLocation() {
+    const mapEl = $("locMap"), metaEl = $("locMeta");
+    if (!mapEl) return;
+    const t = cur();
+    const loc = t && t.location;
+    if (!loc || typeof loc.lat !== "number" || typeof loc.lon !== "number") {
+      mapEl.innerHTML = `<div class="loc-empty">No location captured</div>`;
+      metaEl.textContent = "";
+      return;
+    }
+    // A small bounding box around the point makes the pin clearly visible.
+    const d = 0.004;
+    const bbox = [loc.lon - d, loc.lat - d, loc.lon + d, loc.lat + d].join("%2C");
+    const marker = `${loc.lat}%2C${loc.lon}`;
+    const src = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${marker}`;
+    // Only rebuild the iframe when the target changed (avoids reload flicker on
+    // unrelated re-renders such as editing a field).
+    if (mapEl.dataset.marker !== marker) {
+      mapEl.dataset.marker = marker;
+      mapEl.innerHTML = `<iframe title="Transaction location" src="${src}" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>`;
+    }
+    const acc = loc.accuracy != null ? ` &middot; ±${loc.accuracy} m` : "";
+    const ll = `${loc.lat.toFixed(6)}, ${loc.lon.toFixed(6)}`;
+    metaEl.innerHTML = `<a href="https://www.google.com/maps?q=${loc.lat},${loc.lon}" target="_blank" rel="noopener">${esc(ll)}</a>${acc}`;
   }
 
   // ---- account select (grouped: code  name) ----
@@ -172,15 +204,6 @@
     if (t.hasSignature) media += `<figure><figcaption>Signature</figcaption><canvas class="sig-box" id="sigCv" width="230" height="86"></canvas></figure>`;
     if (!media) media = `<span class="none">No receipts or signature attached</span>`;
 
-    const loc = t.location;
-    let locHtml = `<span class="rec-value muted">Not captured</span>`;
-    if (loc && typeof loc.lat === "number" && typeof loc.lon === "number") {
-      const ll = `${loc.lat.toFixed(6)}, ${loc.lon.toFixed(6)}`;
-      const acc = loc.accuracy != null ? ` (±${loc.accuracy} m)` : "";
-      const url = `https://www.google.com/maps?q=${loc.lat},${loc.lon}`;
-      locHtml = `<a class="rec-value loc-link" href="${url}" target="_blank" rel="noopener">${esc(ll)}${esc(acc)} &#8599;</a>`;
-    }
-
     wrap.innerHTML = `
       <div class="rec-field">
         <label>Beneficiary</label>
@@ -213,10 +236,6 @@
       <div class="rec-field">
         <label>Recorded</label>
         <div class="rec-value">${fmtWhen(t.recordedAt)} &middot; <span class="mission-pill ${t.mission}">${titleCase(t.mission)}</span></div>
-      </div>
-      <div class="rec-field">
-        <label>Location</label>
-        ${locHtml}
       </div>
       <div class="rec-field">
         <label>Attachments</label>
@@ -446,7 +465,9 @@
   async function savePeriod() {
     try {
       const res = await api("/api/period", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ period: $("period").value }) });
-      state.period = res.period; $("period").value = res.period; toast("Fund period " + res.period, "ok");
+      state.period = res.period; $("period").value = res.period;
+      const pb = $("periodBadge"); if (pb) pb.textContent = "WF " + res.period;
+      toast("Fund period " + res.period, "ok");
     } catch (e) { toast("Invalid period (000-999)", "err"); $("period").value = state.period; }
   }
 
@@ -454,8 +475,18 @@
   function showHistory() { state.view = "history"; renderAll(); }
   function showReview() { state.view = "review"; renderAll(); }
 
+  // ---- settings popup ----
+  function openSettings() { $("settingsModal").classList.remove("hidden"); }
+  function closeSettings() { $("settingsModal").classList.add("hidden"); }
+
   // ---- keyboard: Enter approves; arrows navigate; [ ] calendar. No E, no M. ----
   function onKey(e) {
+    // Settings popup: Escape closes it, and it otherwise swallows shortcuts so
+    // typing the fund period never triggers navigation/approve.
+    if (!$("settingsModal").classList.contains("hidden")) {
+      if (e.key === "Escape") closeSettings();
+      return;
+    }
     if (state.view !== "review") { if (e.key === "Escape") showReview(); return; }
     if (!$("confirmModal").classList.contains("hidden")) {
       if (e.key === "Enter") { e.preventDefault(); doDelete(); }
@@ -484,8 +515,12 @@
     document.querySelectorAll(".mission-tab").forEach((b) => b.addEventListener("click", () => switchMission(b.dataset.mission)));
     $("prevBtn").addEventListener("click", () => move(-1));
     $("nextBtn").addEventListener("click", () => move(1));
-    $("historyBtn").addEventListener("click", () => (state.view === "review" ? showHistory() : showReview()));
+    $("historyBtn").addEventListener("click", () => { closeSettings(); (state.view === "review" ? showHistory() : showReview()); });
     $("backToReview").addEventListener("click", showReview);
+    // Settings popup (mission, fund period, history, help)
+    $("settingsBtn").addEventListener("click", openSettings);
+    $("closeSettings").addEventListener("click", closeSettings);
+    $("settingsModal").addEventListener("click", (e) => { if (e.target.id === "settingsModal") closeSettings(); });
     $("confirmCancel").addEventListener("click", () => { $("confirmModal").classList.add("hidden"); pendingDelete = null; });
     $("confirmOk").addEventListener("click", doDelete);
     document.addEventListener("keydown", onKey);
