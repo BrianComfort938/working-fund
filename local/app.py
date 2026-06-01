@@ -375,15 +375,35 @@ def _open_browser(port):
     webbrowser.open(f"http://127.0.0.1:{port}/")
 
 
+def _find_free_port(preferred=5000):
+    """Return the preferred port if free, otherwise the next open one. Prevents
+    the confusing case where a stale/previous instance is still holding 5000 and
+    a fresh run either crashes ('address in use') or the browser opens the old
+    server showing stale data."""
+    import socket
+    for port in [preferred] + list(range(5001, 5051)):
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            s.bind(("127.0.0.1", port))
+            return port
+        except OSError:
+            continue
+        finally:
+            s.close()
+    return preferred  # fall back; app.run will surface a clear error if taken
+
+
 def main():
     storage.init_db()
     load_queue()
     printing.warm_up()  # probe silent-print capability in the background
-    port = 5000
+    port = _find_free_port(5000)
     counts = _mission_counts()
     print(f"\n  Working Fund review: {len(STATE['all'])} transaction(s) "
           f"(East {counts['east']}, South {counts['south']}). "
           f"{'(DEMO data)' if not cloud.is_cloud() else ''}")
+    if port != 5000:
+        print(f"  (Port 5000 was busy — using {port} instead.)")
     print(f"  Open http://127.0.0.1:{port}/  (a browser tab should open automatically)\n")
     threading.Timer(1.0, _open_browser, args=(port,)).start()
     app.run(host="127.0.0.1", port=port, debug=False)

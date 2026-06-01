@@ -79,7 +79,13 @@
     state.counts = s.counts || { east: 0, south: 0 };
     $("period").value = s.period;
     const saved = localStorage.getItem("workingfund_mission");
-    const wanted = MISSIONS.indexOf(saved) !== -1 ? saved : s.mission;
+    let wanted = MISSIONS.indexOf(saved) !== -1 ? saved : s.mission;
+    // If the chosen mission has no transactions but the other one does, start on
+    // the mission that actually has data — otherwise the reviewer sees an empty
+    // "nothing to review" screen while transactions sit in the other mission.
+    if (!state.counts[wanted] && state.counts[wanted === "east" ? "south" : "east"]) {
+      wanted = wanted === "east" ? "south" : "east";
+    }
     if (wanted === s.mission) { state.mission = s.mission; state.queue = s.queue; }
     else {
       const res = await api("/api/mission", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mission: wanted }) });
