@@ -141,6 +141,35 @@ def save_receipt(tx_id, data_url, which):
     return fname
 
 
+def remove_transaction(tx_id):
+    """Undo a local record (used when a committed transaction is reversed): drop its
+    SQLite row, rewrite the CSV without it, and delete its receipt/signature files."""
+    if not tx_id:
+        return
+    try:
+        con = sqlite3.connect(DB_PATH)
+        con.execute("DELETE FROM transactions WHERE transaction_id=?", (tx_id,))
+        con.commit()
+        con.close()
+    except Exception:
+        pass
+    rows = _read_csv_rows()
+    keep = [r for r in rows if r.get("transaction_id") != tx_id]
+    if len(keep) != len(rows):
+        with open(CSV_PATH, "w", newline="", encoding="utf-8") as f:
+            w = csv.DictWriter(f, fieldnames=CSV_FIELDS)
+            w.writeheader()
+            w.writerows(keep)
+    for suf in ("_main.jpg", "_main.png", "_main.svg", "_second.jpg", "_second.png",
+                "_second.svg", "_signature.json"):
+        p = os.path.join(RECEIPTS_DIR, tx_id + suf)
+        if os.path.exists(p):
+            try:
+                os.remove(p)
+            except OSError:
+                pass
+
+
 def save_signature(tx_id, sig):
     """Persist the compact vector-stroke signature next to the receipts as a small
     JSON file (typically a few hundred bytes), so it can be re-rendered later."""

@@ -1,11 +1,17 @@
 """Local Working Fund review app.
 
-On run it pulls unlogged transactions from MongoDB Atlas (or demo data), serves a
-keyboard-driven review page in your browser, and on approval prints the physical
-record and saves to SQLite + transaction-backup.csv.
+On run it pulls ALL transactions from MongoDB Atlas (or demo data) and serves an
+editable, keyboard-driven review page. Each transaction is editable on load.
 
-The reviewer picks a mission (East or South); only that mission's transactions
-are shown and acted on.
+Per transaction the reviewer can:
+  - Approve  -> save locally (SQLite + CSV + receipts + signature), print the A4
+                record, then DELETE it from the cloud (incl. receipts/signature).
+  - Skip     -> leave it on the cloud (hidden only for this session).
+  - Delete   -> DELETE it from the cloud (incl. receipts/signature), no local save.
+
+A browser-side History page lists recently approved / deleted transactions and can
+reverse them: while the app is running a reversal restores the full transaction to
+the queue (and undoes the local record for approved ones).
 
     python app.py            # uses .env / environment for MONGODB_URI
 """
@@ -29,13 +35,16 @@ import storage
 app = Flask(__name__)
 
 # Single local user -> simple in-memory session state.
-# "all" holds every unlogged transaction; the UI shows only the selected mission.
-STATE = {"all": [], "mission": "east", "period": "000"}
+# "all" holds every transaction pulled from the cloud; the UI shows one mission.
+# "handled" keeps recently approved/deleted full transactions (with images) so the
+# print view still works after removal and so History can fully restore them.
+STATE = {"all": [], "mission": "east", "period": "000", "handled": {}}
 MISSIONS = ("east", "south")
+HANDLED_CAP = 60
 
 METHOD_LABELS = {"cash": "ESPÈCES", "wave": "WAVE", "orange": "ORANGE"}
 
-# Exact account codes (KEEP EXACT) — used to keep accountName in sync on edit.
+# Exact account codes (KEEP EXACT).
 ACCOUNT_CODES = {
     "00": "400-5102 Travel In-field", "01": "400-5700 Furnishings YM",
     "02": "400-5930 Food and Personal Items", "03": "400-5868 Utilities YM",
@@ -57,15 +66,24 @@ ACCOUNT_CODES = {
 }
 
 
+def _img_to_data_url(val):
+    """Accept a Base64 data URL (str) or raw JPEG bytes (BSON Binary) -> data URL."""
+    if not val:
+        return ""
+    if isinstance(val, str):
+        return val
+    try:
+        return "data:image/jpeg;base64," + base64.b64encode(bytes(val)).decode("ascii")
+    except Exception:
+        return ""
+
+
 def _to_view(doc):
     rid = str(doc.get("_id") or doc.get("id") or "")
-    recorded = doc.get("createdAt") or doc.get("clientCreatedAt")
+    recorded = doc.get("createdAt") or doc.get("clientCreatedAt") or doc.get("recordedAt")
     if isinstance(recorded, datetime):
         recorded = recorded.isoformat()
     m = doc.get("mission", "east")
-    # Receipts may arrive as Base64 data URLs (offline outbox / older docs) or as
-    # raw BSON Binary (economical cloud storage). Normalize both to data URLs for
-    # the in-memory view so the rest of the app is storage-agnostic.
     return {
         "id": rid,
         "mission": m if m in MISSIONS else "east",
@@ -78,27 +96,13 @@ def _to_view(doc):
         "method": doc.get("method", ""),
         "recordedAt": recorded or "",
         "receiptImage": _img_to_data_url(doc.get("receiptImage")),
-        "secondReceiptImage": _img_to_data_url(
-            doc.get("secondReceiptImage", doc.get("waveReceiptImage"))),
+        "secondReceiptImage": _img_to_data_url(doc.get("secondReceiptImage", doc.get("waveReceiptImage"))),
         "signature": doc.get("signature") or None,
     }
 
 
-def _img_to_data_url(val):
-    """Accept a Base64 data URL (str) or raw JPEG bytes (BSON Binary) -> data URL."""
-    if not val:
-        return ""
-    if isinstance(val, str):
-        return val
-    try:
-        b64 = base64.b64encode(bytes(val)).decode("ascii")
-        return "data:image/jpeg;base64," + b64
-    except Exception:
-        return ""
-
-
 def load_queue():
-    docs = cloud.fetch_unlogged()  # fetch all missions; filter in the UI
+    docs = cloud.fetch_all()  # ALL cloud transactions
     if docs is None:
         import demo_data
         docs = demo_data.SAMPLES
@@ -108,6 +112,10 @@ def load_queue():
 
 def _find(tx_id):
     return next((t for t in STATE["all"] if t["id"] == tx_id), None)
+
+
+def _find_any(tx_id):
+    return _find(tx_id) or STATE["handled"].get(tx_id)
 
 
 def _visible():
@@ -129,7 +137,7 @@ def _light(t):
     out["hasReceipt"] = bool(t["receiptImage"])
     out["hasSecondReceipt"] = bool(t["secondReceiptImage"])
     out["hasSignature"] = bool(t.get("signature"))
-    out["signature"] = t.get("signature")  # compact vector strokes; small enough to inline
+    out["signature"] = t.get("signature")  # compact strokes; small enough to inline
     return out
 
 
@@ -139,7 +147,6 @@ def _fmt_amount(amount, currency):
 
 
 def _signature_svg(sig):
-    """Render compact vector strokes to an inline SVG path for the printed record."""
     if not sig or not sig.get("s"):
         return ""
     w, h = sig.get("w") or 1, sig.get("h") or 1
@@ -155,6 +162,29 @@ def _signature_svg(sig):
     return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" '
             f'preserveAspectRatio="xMidYMid meet" style="width:100%;height:55px">'
             + "".join(paths) + "</svg>")
+
+
+def _apply_edits(t, data):
+    for k in ("beneficiary", "accountCode", "accountName", "description", "method"):
+        if data.get(k) is not None:
+            t[k] = data[k]
+    if data.get("mission") in MISSIONS:
+        t["mission"] = data["mission"]
+    if "amount" in data:
+        try:
+            t["amount"] = int(data["amount"])
+        except (TypeError, ValueError):
+            pass
+    if data.get("accountCode") in ACCOUNT_CODES and not data.get("accountName"):
+        t["accountName"] = ACCOUNT_CODES[data["accountCode"]]
+
+
+def _remember_handled(t):
+    STATE["handled"][t["id"]] = t
+    if len(STATE["handled"]) > HANDLED_CAP:
+        # drop oldest insertion(s)
+        for k in list(STATE["handled"].keys())[:-HANDLED_CAP]:
+            STATE["handled"].pop(k, None)
 
 
 @app.route("/")
@@ -179,8 +209,7 @@ def api_mission():
     if m not in MISSIONS:
         return jsonify({"error": "mission must be east or south"}), 400
     STATE["mission"] = m
-    return jsonify({"mission": m, "counts": _mission_counts(),
-                    "queue": [_light(t) for t in _visible()]})
+    return jsonify({"mission": m, "counts": _mission_counts(), "queue": [_light(t) for t in _visible()]})
 
 
 @app.route("/api/period", methods=["POST"])
@@ -198,7 +227,7 @@ def api_period():
 
 @app.route("/api/receipt/<tx_id>/<which>")
 def api_receipt(tx_id, which):
-    t = _find(tx_id)
+    t = _find_any(tx_id)
     if not t:
         abort(404)
     data_url = t["receiptImage"] if which == "main" else t["secondReceiptImage"]
@@ -212,27 +241,12 @@ def api_receipt(tx_id, which):
     return Response(base64.b64decode(b64), mimetype=mime)
 
 
-@app.route("/api/edit/<tx_id>", methods=["POST"])
-def api_edit(tx_id):
-    t = _find(tx_id)
-    if not t:
+@app.route("/api/signature/<tx_id>.svg")
+def api_signature(tx_id):
+    t = _find_any(tx_id)
+    if not t or not t.get("signature"):
         abort(404)
-    data = request.json or {}
-    for k in ("beneficiary", "accountCode", "accountName", "description", "method"):
-        if k in data:
-            t[k] = data[k]
-    if "signature" in data:
-        t["signature"] = data["signature"] or None
-    if data.get("mission") in MISSIONS:
-        t["mission"] = data["mission"]
-    if "amount" in data:
-        try:
-            t["amount"] = int(data["amount"])
-        except (TypeError, ValueError):
-            pass
-    if data.get("accountCode") in ACCOUNT_CODES and not data.get("accountName"):
-        t["accountName"] = ACCOUNT_CODES[data["accountCode"]]
-    return jsonify({"ok": True, "tx": _light(t)})
+    return Response(_signature_svg(t["signature"]), mimetype="image/svg+xml")
 
 
 @app.route("/api/approve/<tx_id>", methods=["POST"])
@@ -240,8 +254,9 @@ def api_approve(tx_id):
     t = _find(tx_id)
     if not t:
         abort(404)
+    _apply_edits(t, request.json or {})
     period = STATE["period"]
-    # 1) save receipts + signature to disk (from the in-memory base64 / strokes)
+    # 1) save receipts + signature locally
     storage.save_receipt(t["id"], t.get("receiptImage"), "main")
     storage.save_receipt(t["id"], t.get("secondReceiptImage"), "second")
     storage.save_signature(t["id"], t.get("signature"))
@@ -249,11 +264,12 @@ def api_approve(tx_id):
     storage.write_sqlite(t, period)
     storage.append_csv(t, period)
     rollover = storage.rollover_if_needed()
-    # 3) mark cloud doc logged + strip its images
+    # 3) keep full copy for printing + possible reversal, then delete from cloud
+    _remember_handled(t)
     try:
-        cloud.mark_logged(t["id"], period)
-    except Exception as e:  # never block the local record on a cloud hiccup
-        app.logger.warning("cloud mark_logged failed: %s", e)
+        cloud.delete_tx(t["id"])   # removes the doc and its receipts/signature
+    except Exception as e:
+        app.logger.warning("cloud delete (approve) failed: %s", e)
     # 4) drop from queue
     STATE["all"] = [x for x in STATE["all"] if x["id"] != t["id"]]
     return jsonify({"ok": True, "rollover": rollover})
@@ -264,17 +280,43 @@ def api_delete(tx_id):
     t = _find(tx_id)
     if not t:
         abort(404)
+    _remember_handled(t)
     try:
-        cloud.delete_tx(t["id"])
+        cloud.delete_tx(t["id"])   # removes the doc and its receipts/signature
     except Exception as e:
         app.logger.warning("cloud delete failed: %s", e)
     STATE["all"] = [x for x in STATE["all"] if x["id"] != t["id"]]
     return jsonify({"ok": True})
 
 
+@app.route("/api/restore", methods=["POST"])
+def api_restore():
+    data = request.json or {}
+    tx_id = data.get("id")
+    status = data.get("status")
+    snap = data.get("tx") or {}
+    # Prefer the full cached transaction (has images); fall back to snapshot text.
+    tx = STATE["handled"].pop(tx_id, None)
+    if tx is None:
+        tx = {
+            "id": tx_id or "", "mission": snap.get("mission", "east"),
+            "beneficiary": snap.get("beneficiary", ""), "accountCode": snap.get("accountCode", ""),
+            "accountName": snap.get("accountName", ""), "description": snap.get("description", ""),
+            "amount": int(snap.get("amount", 0) or 0), "currency": snap.get("currency", "XOF"),
+            "method": snap.get("method", ""), "recordedAt": snap.get("recordedAt", ""),
+            "receiptImage": "", "secondReceiptImage": "", "signature": snap.get("signature"),
+        }
+    if status == "committed":
+        storage.remove_transaction(tx_id)   # undo the local record
+    if not _find(tx["id"]):
+        STATE["all"].insert(0, tx)
+    return jsonify({"ok": True, "counts": _mission_counts(),
+                    "mission": STATE["mission"], "queue": [_light(t) for t in _visible()]})
+
+
 @app.route("/print/<tx_id>")
 def print_record(tx_id):
-    t = _find(tx_id)
+    t = _find_any(tx_id)
     if not t:
         abort(404)
     date_iso, date_fr = "", ""
@@ -297,21 +339,12 @@ def print_record(tx_id):
     )
 
 
-@app.route("/api/signature/<tx_id>.svg")
-def api_signature(tx_id):
-    t = _find(tx_id)
-    if not t or not t.get("signature"):
-        abort(404)
-    return Response(_signature_svg(t["signature"]), mimetype="image/svg+xml")
-
-
 @app.route("/print/csv-batch/<batch_id>")
 def print_csv_batch(batch_id):
     rows = storage.read_batch(batch_id)
     if not rows:
         abort(404)
-    return render_template("csv_batch.html", rows=rows, batch_id=batch_id,
-                           count=len(rows), auto_print=True)
+    return render_template("csv_batch.html", rows=rows, batch_id=batch_id, count=len(rows), auto_print=True)
 
 
 def _open_browser(port):
@@ -323,7 +356,7 @@ def main():
     load_queue()
     port = int(os.environ.get("PORT", "5000"))
     counts = _mission_counts()
-    print(f"\n  Working Fund review: {len(STATE['all'])} unlogged "
+    print(f"\n  Working Fund review: {len(STATE['all'])} transaction(s) "
           f"(East {counts['east']}, South {counts['south']}). "
           f"{'(DEMO data)' if not cloud.is_cloud() else ''}")
     print(f"  Open http://127.0.0.1:{port}/  (a browser tab should open automatically)\n")

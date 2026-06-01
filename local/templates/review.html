@@ -20,33 +20,70 @@
     </div>
     <div class="period">
       <label for="period">Fund period</label>
-      <input id="period" inputmode="numeric" maxlength="3" value="000" title="000–999">
+      <input id="period" inputmode="numeric" maxlength="3" value="000" title="000-999">
     </div>
-    <div id="progress" class="progress"></div>
+    <div class="nav-group" id="navGroup">
+      <button type="button" class="nav-btn" id="prevBtn" title="Previous">&#8249;</button>
+      <span id="progress" class="progress">0 / 0</span>
+      <button type="button" class="nav-btn" id="nextBtn" title="Next">&#8250;</button>
+    </div>
+    <button type="button" class="hist-btn" id="historyBtn">History</button>
   </header>
 
-  <main>
+  <!-- REVIEW VIEW -->
+  <main id="reviewView">
     <section class="col-main">
-      <div id="card" class="card"></div>
-      <div id="editor" class="editor hidden"></div>
+      <div id="recForm" class="rec-form"></div>
     </section>
-
     <aside class="col-side">
       <div id="calendar" class="calendar"></div>
       <div class="shortcuts">
-        <h3>Keyboard</h3>
+        <h3>How to review</h3>
         <ul>
-          <li><kbd>A</kbd> approve &amp; print</li>
-          <li><kbd>E</kbd> edit</li>
-          <li><kbd>D</kbd> delete</li>
-          <li><kbd>M</kbd> switch mission</li>
-          <li><kbd>←</kbd> <kbd>→</kbd> prev / next</li>
-          <li><kbd>Enter</kbd> save · <kbd>Esc</kbd> cancel</li>
+          <li>Fields are editable right away &mdash; just type.</li>
+          <li><kbd>Enter</kbd> approve &amp; print</li>
+          <li><kbd>&#8592;</kbd> <kbd>&#8594;</kbd> previous / next</li>
           <li><kbd>[</kbd> <kbd>]</kbd> calendar month</li>
+          <li>Use the buttons for Skip and Delete.</li>
         </ul>
       </div>
     </aside>
   </main>
+
+  <!-- HISTORY VIEW -->
+  <main id="historyView" class="hidden">
+    <div class="history-head">
+      <h2>History</h2>
+      <button type="button" class="btn" id="backToReview">Back to review</button>
+    </div>
+    <p class="muted hist-note">Stored on this computer only. Reverse puts a transaction
+      back into the review list (and undoes the local record for approved ones).</p>
+    <div class="history-cols">
+      <section>
+        <h3 class="hist-col-title committed">Recently approved</h3>
+        <div id="committedList" class="hist-list"></div>
+      </section>
+      <section>
+        <h3 class="hist-col-title deleted">Recently deleted</h3>
+        <div id="deletedList" class="hist-list"></div>
+      </section>
+    </div>
+  </main>
+
+  <!-- Delete confirmation -->
+  <div id="confirmModal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head"><h2>Delete transaction</h2></div>
+      <p class="hint" id="confirmMsg"></p>
+      <p class="hint warn">This permanently removes it from the cloud, including its
+        receipts and signature. You can reverse it from History while this app stays open.</p>
+      <div class="modal-actions">
+        <span class="spacer"></span>
+        <button id="confirmCancel" class="btn">Cancel</button>
+        <button id="confirmOk" class="btn danger-btn">Delete</button>
+      </div>
+    </div>
+  </div>
 
   <div id="toast" class="toast hidden"></div>
   <script src="/static/review.js"></script>

@@ -1,7 +1,6 @@
 """MongoDB Atlas access via pymongo. Returns None from fetch when no MONGODB_URI
 is configured, which signals the app to use demo data."""
 import os
-from datetime import datetime, timezone
 
 try:
     from pymongo import MongoClient
@@ -30,35 +29,22 @@ def is_cloud():
     return bool(os.environ.get("MONGODB_URI")) and MongoClient is not None
 
 
-def fetch_unlogged(mission=None):
-    """Return list of unlogged docs (optionally filtered to one mission), or None
-    if no cloud is configured (demo)."""
+def fetch_all(mission=None):
+    """Return ALL transaction docs (optionally filtered to one mission), or None
+    if no cloud is configured (demo). The review app shows everything on the
+    cloud, since approve/delete now remove documents entirely."""
     col = _connect()
     if col is None:
         return None
-    query = {"logged": {"$ne": True}}
+    query = {}
     if mission in ("east", "south"):
         query["mission"] = mission
     return list(col.find(query).sort("createdAt", 1))
 
 
-def mark_logged(tx_id, fund_period):
-    """Flag the cloud doc as logged and strip its images to save Atlas storage."""
-    col = _connect()
-    if col is None:
-        return
-    col.update_one(
-        {"_id": ObjectId(tx_id)},
-        {
-            "$set": {"logged": True, "loggedAt": datetime.now(timezone.utc), "fundPeriod": fund_period},
-            # Strip the heavy image blobs once they are saved locally, so the cloud
-            # collection stays tiny. The compact signature strokes are kept.
-            "$unset": {"receiptImage": "", "secondReceiptImage": "", "waveReceiptImage": ""},
-        },
-    )
-
-
 def delete_tx(tx_id):
+    """Delete the whole document (its receipts + signature live inside it, so they
+    go with it). Called on both approve and delete."""
     col = _connect()
     if col is None:
         return

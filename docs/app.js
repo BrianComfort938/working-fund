@@ -52,12 +52,15 @@
   const SECOND_RECEIPT = { wave: "Wave receipt", orange: "Orange Money receipt" };
   const METHOD_LABELS = { cash: "Cash", wave: "Wave", orange: "Orange Money" };
 
-  // Default presets (seeded once; the user can add/remove their own).
+  // Default presets (seeded by version; the user can add/remove their own).
+  // Bumping PRESETS_VERSION re-seeds these over any previously stored defaults.
+  const PRESETS_VERSION = "2";
   const DEFAULT_PRESETS = [
-    { id: "p_food",  label: "Food",        accountCode: "02", description: "", amount: 0, method: "cash" },
-    { id: "p_gas",   label: "Gasoline",    accountCode: "17", description: "", amount: 0, method: "cash" },
-    { id: "p_rent",  label: "Office rent", accountCode: "22", description: "", amount: 0, method: "wave" },
-    { id: "p_net",   label: "Internet",    accountCode: "14", description: "", amount: 0, method: "wave" }
+    { id: "p_sacred",  label: "Return of sacred funds",      accountCode: "02", description: "", amount: 0, method: "cash" },
+    { id: "p_zhealth", label: "Zone funds health",          accountCode: "51", description: "", amount: 0, method: "cash" },
+    { id: "p_ztravel", label: "Zone funds travel",          accountCode: "00", description: "", amount: 0, method: "cash" },
+    { id: "p_prepaid", label: "Prepaid power meter recharge", accountCode: "03", description: "", amount: 0, method: "wave" },
+    { id: "p_power",   label: "Power bill",                 accountCode: "03", description: "", amount: 0, method: "wave" }
   ];
 
   // ---- helpers ----
@@ -231,11 +234,16 @@
   // Presets
   // =========================================================================
   function loadPresets() {
+    const ver = localStorage.getItem("workingfund_presets_version");
     const raw = localStorage.getItem("workingfund_presets");
-    if (raw == null) { savePresets(DEFAULT_PRESETS); return DEFAULT_PRESETS.slice(); }
+    // Re-seed when missing or when the default set has been versioned up.
+    if (raw == null || ver !== PRESETS_VERSION) { savePresets(DEFAULT_PRESETS); return DEFAULT_PRESETS.slice(); }
     try { return JSON.parse(raw); } catch (_) { return DEFAULT_PRESETS.slice(); }
   }
-  function savePresets(arr) { localStorage.setItem("workingfund_presets", JSON.stringify(arr)); }
+  function savePresets(arr) {
+    localStorage.setItem("workingfund_presets", JSON.stringify(arr));
+    localStorage.setItem("workingfund_presets_version", PRESETS_VERSION);
+  }
 
   function renderPresets() {
     const row = $("presetsRow");
