@@ -170,6 +170,107 @@ def remove_transaction(tx_id):
                 pass
 
 
+# Honorifics / titles to ignore when comparing beneficiary names. Almost every
+# name starts with one of these, so they carry no signal for duplicate-matching.
+NAME_STOPWORDS = {
+    "elder", "elders", "soeur", "soeurs", "sister", "sisters",
+    "frere", "frère", "freres", "frères", "brother", "brothers",
+    "president", "président", "pres", "pdt", "mr", "mrs", "ms", "mme", "m", "dr",
+}
+
+
+def _name_tokens(name):
+    """Lowercased, honorific-stripped, de-accented word tokens of a name."""
+    s = (name or "").lower()
+    # Drop accents so 'Koné' matches 'kone'.
+    repl = {"é": "e", "è": "e", "ê": "e", "ë": "e", "à": "a", "â": "a", "ä": "a",
+            "î": "i", "ï": "i", "ô": "o", "ö": "o", "û": "u", "ü": "u", "ç": "c"}
+    s = "".join(repl.get(ch, ch) for ch in s)
+    toks = [t for t in "".join(c if c.isalnum() else " " for c in s).split() if t]
+    return [t for t in toks if t not in NAME_STOPWORDS]
+
+
+def _all_rows():
+    """Every persisted row from SQLite, plus any CSV rows not already in SQLite
+    (matched by transaction_id). Normalized to the CSV field names, newest first."""
+    rows = []
+    seen_ids = set()
+    try:
+        con = sqlite3.connect(DB_PATH)
+        con.row_factory = sqlite3.Row
+        for r in con.execute(
+            "SELECT recorded_at, mission, fund_period, beneficiary, account_code, "
+            "account_name, description, amount, currency, method, transaction_id "
+            "FROM transactions ORDER BY id DESC"
+        ):
+            d = dict(r)
+            rows.append(d)
+            if d.get("transaction_id"):
+                seen_ids.add(d["transaction_id"])
+        con.close()
+    except Exception:
+        pass
+    # CSV may hold rows that rolled over / aren't in this DB; include the extras.
+    for r in reversed(_read_csv_rows()):
+        if r.get("transaction_id") and r["transaction_id"] in seen_ids:
+            continue
+        rows.append(r)
+    return rows
+
+
+def find_similar(beneficiary, amount, exclude_id="", limit=8, amount_tolerance=0):
+    """Recent local entries (SQLite + CSV) that look similar to the one being
+    reviewed: a shared beneficiary name token (honorifics like Elder/Sister
+    ignored) OR the same/very-close amount. Newest first, de-duplicated.
+
+    Returns a list of dicts: beneficiary, amount, currency, account_code,
+    account_name, recorded_at, method, mission, match ("name" | "amount" | "both").
+    """
+    want_tokens = set(_name_tokens(beneficiary))
+    try:
+        want_amount = int(amount)
+    except (TypeError, ValueError):
+        want_amount = None
+
+    out, seen = [], set()
+    for r in _all_rows():
+        if exclude_id and r.get("transaction_id") == exclude_id:
+            continue
+        try:
+            row_amount = int(r.get("amount") or 0)
+        except (TypeError, ValueError):
+            row_amount = 0
+
+        name_hit = bool(want_tokens & set(_name_tokens(r.get("beneficiary"))))
+        amount_hit = (
+            want_amount is not None and want_amount != 0
+            and abs(row_amount - want_amount) <= max(0, int(amount_tolerance))
+        )
+        if not name_hit and not amount_hit:
+            continue
+
+        # De-dupe identical-looking suggestions (same name + amount + date).
+        key = (str(r.get("beneficiary", "")).strip().lower(), row_amount, r.get("recorded_at", ""))
+        if key in seen:
+            continue
+        seen.add(key)
+
+        out.append({
+            "beneficiary": r.get("beneficiary", ""),
+            "amount": row_amount,
+            "currency": r.get("currency", "XOF"),
+            "account_code": r.get("account_code", ""),
+            "account_name": r.get("account_name", ""),
+            "recorded_at": r.get("recorded_at", ""),
+            "method": r.get("method", ""),
+            "mission": r.get("mission", ""),
+            "match": "both" if (name_hit and amount_hit) else ("name" if name_hit else "amount"),
+        })
+        if len(out) >= max(1, int(limit)):
+            break
+    return out
+
+
 def save_signature(tx_id, sig):
     """Persist the compact vector-stroke signature next to the receipts as a small
     JSON file (typically a few hundred bytes), so it can be re-rendered later."""

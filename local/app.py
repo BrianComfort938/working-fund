@@ -230,6 +230,22 @@ def api_mission():
     return jsonify({"mission": m, "counts": _mission_counts(), "queue": [_light(t) for t in _visible()]})
 
 
+@app.route("/api/similar/<tx_id>")
+def api_similar(tx_id):
+    """Recent local entries (SQLite + CSV) similar to the transaction under
+    review — same beneficiary name (Elder/Sister etc. ignored) or same amount —
+    to help the reviewer catch duplicates."""
+    t = _find_any(tx_id)
+    if not t:
+        return jsonify({"matches": []})
+    matches = storage.find_similar(
+        beneficiary=t.get("beneficiary", ""),
+        amount=t.get("amount", 0),
+        exclude_id=tx_id,
+    )
+    return jsonify({"matches": matches})
+
+
 @app.route("/api/period", methods=["POST"])
 def api_period():
     raw = (request.json or {}).get("period", "")
