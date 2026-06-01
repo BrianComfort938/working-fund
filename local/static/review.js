@@ -133,47 +133,72 @@
     else renderHistory();
   }
 
-  // ---- left timeline banner: recorded time on the sector day (9:00 - 18:30) ----
-  const SECTOR_START_MIN = 9 * 60;        // 09:00
-  const SECTOR_END_MIN = 18 * 60 + 30;    // 18:30
-  // Notable marks shown on the rail.
-  const SECTOR_MARKS = [
-    { min: 9 * 60, label: "9:00", note: "Sector start" },
+  // ---- left timeline banner: all of a day's transactions on a full 24h rail ----
+  const DAY_MIN = 24 * 60;                 // full day span
+  const TL_MARKS = [                        // notable times (labels sit beside the line)
+    { min: 6 * 60 + 30, label: "6:30" },
+    { min: 9 * 60, label: "9:00" },
     { min: 12 * 60, label: "12:00" },
-    { min: 14 * 60, label: "14:00" },
-    { min: 18 * 60 + 30, label: "18:30", note: "Sector end" },
+    { min: 18 * 60 + 30, label: "18:30" },
+    { min: 22 * 60 + 30, label: "22:30" },
   ];
+  const txMinutes = (t) => {
+    const d = t && t.recordedAt ? new Date(t.recordedAt) : null;
+    if (!d || isNaN(d)) return null;
+    return d.getHours() * 60 + d.getMinutes();
+  };
+  const hhmm = (mins) => String(Math.floor(mins / 60)).padStart(2, "0") + ":" + String(mins % 60).padStart(2, "0");
+  function clip(text, words) {
+    const w = String(text || "").trim().split(/\s+/).filter(Boolean);
+    if (!w.length) return "";
+    return w.length > words ? w.slice(0, words).join(" ") + "…" : w.join(" ");
+  }
+
   function renderTimeBanner() {
     const el = $("timeBanner");
     if (!el) return;
     const t = cur();
-    const d = t && t.recordedAt ? new Date(t.recordedAt) : null;
-    const hasTime = d && !isNaN(d);
-    const span = SECTOR_END_MIN - SECTOR_START_MIN;
 
-    // Tick marks + labels along the rail.
-    let marks = SECTOR_MARKS.map((m) => {
-      const pct = Math.max(0, Math.min(100, ((m.min - SECTOR_START_MIN) / span) * 100));
-      return `<div class="tl-mark" style="top:${pct}%">` +
-        `<span class="tl-tick"></span>` +
-        `<span class="tl-label">${m.label}${m.note ? `<em>${m.note}</em>` : ""}</span></div>`;
+    // Which day? The current transaction's day, else today.
+    const refD = t && t.recordedAt && !isNaN(new Date(t.recordedAt)) ? new Date(t.recordedAt) : new Date();
+    const dayKey = refD.toDateString();
+
+    // All transactions in the queue recorded that day, with a valid time, sorted.
+    const dayTx = state.queue
+      .map((x, i) => ({ x, i, mins: txMinutes(x) }))
+      .filter((o) => o.mins != null && new Date(o.x.recordedAt).toDateString() === dayKey)
+      .sort((a, b) => a.mins - b.mins);
+
+    const header = `<div class="tl-head">${esc(refD.toLocaleDateString(undefined, { month: "short", day: "numeric" }))}` +
+      `<span class="tl-sub">${dayTx.length} transaction${dayTx.length === 1 ? "" : "s"}</span></div>`;
+
+    // Notable-time marks: tick on the line + label to the right of it.
+    const marks = TL_MARKS.map((m) => {
+      const pct = (m.min / DAY_MIN) * 100;
+      return `<div class="tl-mark" style="top:${pct}%"><span class="tl-tick"></span>` +
+        `<span class="tl-label">${m.label}</span></div>`;
     }).join("");
 
-    let marker = "", header = `<div class="tl-head">No time</div>`;
-    if (hasTime) {
-      const mins = d.getHours() * 60 + d.getMinutes();
-      const clamped = Math.max(SECTOR_START_MIN, Math.min(SECTOR_END_MIN, mins));
-      const pct = ((clamped - SECTOR_START_MIN) / span) * 100;
-      const hh = String(d.getHours()).padStart(2, "0");
-      const mm = String(d.getMinutes()).padStart(2, "0");
-      const outside = mins < SECTOR_START_MIN || mins > SECTOR_END_MIN;
-      header = `<div class="tl-head">${hh}:${mm}${outside ? '<span class="tl-out">outside</span>' : ""}</div>`;
-      marker = `<div class="tl-now" style="top:${pct}%" title="Recorded ${hh}:${mm}">` +
-        `<span class="tl-dot"></span></div>`;
-    }
+    // One marker per transaction: dot on the line + info box to the LEFT.
+    const dots = dayTx.map((o) => {
+      const pct = (o.mins / DAY_MIN) * 100;
+      const isCur = o.i === state.idx;
+      const name = clip(o.x.beneficiary, 4) || "(no name)";
+      const desc = clip(o.x.description, 6);
+      return `<div class="tl-tx${isCur ? " current" : ""}" style="top:${pct}%" data-idx="${o.i}" title="${esc(hhmm(o.mins))} — ${esc(o.x.beneficiary || "")}">` +
+        `<span class="tl-box"><span class="tl-box-name">${esc(name)}</span>` +
+        (desc ? `<span class="tl-box-desc">${esc(desc)}</span>` : "") + `</span>` +
+        `<span class="tl-txdot"></span></div>`;
+    }).join("");
 
-    el.innerHTML = header +
-      `<div class="tl-rail"><div class="tl-line"></div>${marks}${marker}</div>`;
+    el.innerHTML = header + `<div class="tl-rail"><div class="tl-line"></div>${marks}${dots}</div>`;
+
+    // Click a box to jump to that transaction.
+    el.querySelectorAll(".tl-tx").forEach((node) =>
+      node.addEventListener("click", () => {
+        const i = parseInt(node.dataset.idx, 10);
+        if (!isNaN(i)) { state.idx = i; renderAll(); }
+      }));
   }
 
   // ---- live location map (OpenStreetMap embed) for the current transaction ----
