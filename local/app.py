@@ -13,24 +13,19 @@ A browser-side History page lists recently approved / deleted transactions and c
 reverse them: while the app is running a reversal restores the full transaction to
 the queue (and undoes the local record for approved ones).
 
-    python app.py            # uses .env / environment for MONGODB_URI
+    python app.py            # reads MONGODB_URI from secret_config.py
 """
-import os
 import base64
 import threading
 import webbrowser
 from datetime import datetime
 
-try:
-    from dotenv import load_dotenv
-    load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
-except Exception:
-    pass
-
 from flask import Flask, jsonify, request, render_template, Response, abort
 
 import cloud
 import storage
+import mysql_ledger
+import printing
 
 app = Flask(__name__)
 
@@ -98,6 +93,7 @@ def _to_view(doc):
         "receiptImage": _img_to_data_url(doc.get("receiptImage")),
         "secondReceiptImage": _img_to_data_url(doc.get("secondReceiptImage", doc.get("waveReceiptImage"))),
         "signature": doc.get("signature") or None,
+        "location": doc.get("location") or None,
     }
 
 
@@ -138,6 +134,7 @@ def _light(t):
     out["hasSecondReceipt"] = bool(t["secondReceiptImage"])
     out["hasSignature"] = bool(t.get("signature"))
     out["signature"] = t.get("signature")  # compact strokes; small enough to inline
+    out["location"] = t.get("location")    # {lat, lon, accuracy, at} or None
     return out
 
 
@@ -264,15 +261,27 @@ def api_approve(tx_id):
     storage.write_sqlite(t, period)
     storage.append_csv(t, period)
     rollover = storage.rollover_if_needed()
-    # 3) keep full copy for printing + possible reversal, then delete from cloud
+    # 2b) mirror into the local MySQL ledger (best-effort; never blocks approve)
+    mysql_ledger.write(t, period)
+    # 3) print the A4 record. Try silent (no pop-up) printing first; if this
+    #    machine can't (no Selenium/Chrome), tell the client to open the print
+    #    tab so a printout is never lost.
+    printed = printing.print_html_async(_render_record_html(t, auto_print=False), tag="record")
+    # 3b) if the CSV rolled over, print that backup batch the same way.
+    if rollover:
+        batch_html = _render_csv_batch_html(rollover, auto_print=False)
+        if batch_html and printing.print_html_async(batch_html, tag="csvbatch"):
+            rollover = None  # printed silently -> client should not open a tab
+    # 4) keep full copy for printing + possible reversal, then delete from cloud
     _remember_handled(t)
     try:
         cloud.delete_tx(t["id"])   # removes the doc and its receipts/signature
     except Exception as e:
         app.logger.warning("cloud delete (approve) failed: %s", e)
-    # 4) drop from queue
+    # 5) drop from queue
     STATE["all"] = [x for x in STATE["all"] if x["id"] != t["id"]]
-    return jsonify({"ok": True, "rollover": rollover})
+    # printed=True -> client must NOT open a tab; printed=False -> fall back to it.
+    return jsonify({"ok": True, "rollover": rollover, "printed": printed})
 
 
 @app.route("/api/delete/<tx_id>", methods=["POST"])
@@ -314,11 +323,10 @@ def api_restore():
                     "mission": STATE["mission"], "queue": [_light(t) for t in _visible()]})
 
 
-@app.route("/print/<tx_id>")
-def print_record(tx_id):
-    t = _find_any(tx_id)
-    if not t:
-        abort(404)
+def _render_record_html(t, auto_print):
+    """Render the A4 record for a transaction to an HTML string. `auto_print`
+    adds the in-page window.print() trigger used by the visible-tab fallback;
+    the silent printer drives printing itself and passes auto_print=False."""
     date_iso, date_fr = "", ""
     if t["recordedAt"]:
         try:
@@ -335,16 +343,32 @@ def print_record(tx_id):
         amount_str=_fmt_amount(t["amount"], t["currency"]),
         main_img=t.get("receiptImage", ""), wave_img=t.get("secondReceiptImage", ""),
         signature_svg=_signature_svg(t.get("signature")),
-        auto_print=True,
+        auto_print=auto_print,
     )
+
+
+@app.route("/print/<tx_id>")
+def print_record(tx_id):
+    t = _find_any(tx_id)
+    if not t:
+        abort(404)
+    return _render_record_html(t, auto_print=True)
+
+
+def _render_csv_batch_html(batch_id, auto_print):
+    rows = storage.read_batch(batch_id)
+    if not rows:
+        return None
+    return render_template("csv_batch.html", rows=rows, batch_id=batch_id,
+                           count=len(rows), auto_print=auto_print)
 
 
 @app.route("/print/csv-batch/<batch_id>")
 def print_csv_batch(batch_id):
-    rows = storage.read_batch(batch_id)
-    if not rows:
+    html = _render_csv_batch_html(batch_id, auto_print=True)
+    if html is None:
         abort(404)
-    return render_template("csv_batch.html", rows=rows, batch_id=batch_id, count=len(rows), auto_print=True)
+    return html
 
 
 def _open_browser(port):
@@ -354,7 +378,8 @@ def _open_browser(port):
 def main():
     storage.init_db()
     load_queue()
-    port = int(os.environ.get("PORT", "5000"))
+    printing.warm_up()  # probe silent-print capability in the background
+    port = 5000
     counts = _mission_counts()
     print(f"\n  Working Fund review: {len(STATE['all'])} transaction(s) "
           f"(East {counts['east']}, South {counts['south']}). "

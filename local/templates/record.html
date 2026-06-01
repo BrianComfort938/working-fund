@@ -145,7 +145,7 @@
 
         .receipt-container {
 
-            width: 50%;
+            flex: 1;
             height: 100%;
             padding: 10px;
             box-sizing: border-box;
@@ -154,6 +154,11 @@
             align-items: center;
             border-right: 1px solid #eee;
             overflow: hidden;
+        }
+
+        /* No divider line after the last (or only) receipt. */
+        .receipt-container:last-child {
+            border-right: none;
         }
 
         img {
@@ -245,14 +250,20 @@
             </table>
         </div>
 
+        {% if main_img or wave_img %}
         <div class="receipts-section">
+            {% if main_img %}
             <div class="receipt-container">
-                <img src="{{ main_img }}" alt="No Main Receipt">
+                <img src="{{ main_img }}" alt="">
             </div>
+            {% endif %}
+            {% if wave_img %}
             <div class="receipt-container">
-                <img src="{{ wave_img }}" alt="No Wave Receipt">
+                <img src="{{ wave_img }}" alt="">
             </div>
+            {% endif %}
         </div>
+        {% endif %}
     </div>
     {% if auto_print %}<script>
         window.addEventListener('load', function () { setTimeout(function () { window.print(); }, 300); });

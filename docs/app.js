@@ -81,6 +81,11 @@
   let secondImage = "";
   let signature = null;
   let mission = "";
+  let lastPosition = null;   // latest geolocation fix, captured in the background
+  let geoWatchId = null;     // navigator.geolocation.watchPosition handle
+
+  const HISTORY_KEY = "workingfund_history";   // shared across missions, for autofill
+  const HISTORY_CAP = 100;
 
   const balanceKey = (m) => "workingfund_wave_balance_" + (m || mission);
   const outboxKey  = (m) => "workingfund_outbox_" + (m || mission);
@@ -226,7 +231,6 @@
     const label = SECOND_RECEIPT[m];
     $("secondReceiptField").classList.toggle("hidden", !label);
     if (label) $("secondReceiptLabel").textContent = label;
-    $("methodNote").classList.toggle("hidden", m !== "wave");
   }
   function wireMethods() {
     document.querySelectorAll("#methodRow .seg").forEach((b) =>
@@ -556,6 +560,125 @@
   }
 
   // =========================================================================
+  // Autocomplete — learn from past transactions (localStorage) and offer to
+  // fill the WHOLE form while typing. Like presets, but automatic.
+  // =========================================================================
+  function loadHistory() {
+    try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]"); } catch (_) { return []; }
+  }
+  function pushHistory(tx) {
+    // Store the field-fill payload only (no images/signature/location).
+    const entry = {
+      beneficiary: tx.beneficiary || "", accountCode: tx.accountCode || "",
+      description: tx.description || "", amount: Math.abs(tx.amount || 0),
+      sign: (tx.amount || 0) < 0 ? -1 : 1, method: tx.method || ""
+    };
+    if (!entry.beneficiary && !entry.description) return;
+    const arr = loadHistory();
+    // De-dupe on the full combination so repeats bubble up instead of piling up.
+    const key = (e) => [e.beneficiary, e.accountCode, e.description, e.amount, e.sign, e.method].join("|").toLowerCase();
+    const k = key(entry);
+    const deduped = arr.filter((e) => key(e) !== k);
+    deduped.unshift(entry);
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(deduped.slice(0, HISTORY_CAP)));
+  }
+  function matchHistory(q) {
+    q = (q || "").trim().toLowerCase();
+    if (!q) return [];
+    const seen = new Set();
+    return loadHistory().filter((e) => {
+      const hay = (e.beneficiary + " " + e.description + " " + (ACCOUNT_CODES[e.accountCode] || "")).toLowerCase();
+      if (hay.indexOf(q) === -1) return false;
+      const k = [e.beneficiary, e.accountCode, e.description, e.amount, e.sign, e.method].join("|").toLowerCase();
+      if (seen.has(k)) return false;
+      seen.add(k); return true;
+    }).slice(0, 6);
+  }
+  function suggestionRowHtml(e) {
+    const acct = e.accountCode ? `${e.accountCode} ${ACCOUNT_CODES[e.accountCode] || ""}` : "";
+    const amt = e.amount ? (e.sign < 0 ? "-" : "") + groupDigits(e.amount) + " " + CURRENCY : "";
+    const meta = [acct, amt, METHOD_LABELS[e.method] || ""].filter(Boolean).join(" · ");
+    return `<div class="ac-opt" role="option">` +
+      `<span class="ac-who">${escapeHtml(e.beneficiary || e.description || "(no name)")}</span>` +
+      (meta ? `<span class="ac-meta">${escapeHtml(meta)}</span>` : "") + `</div>`;
+  }
+  function applyHistoryEntry(e) {
+    if (e.beneficiary) $("beneficiary").value = e.beneficiary;
+    if (e.accountCode && ACCOUNT_CODES[e.accountCode]) setAccount(e.accountCode);
+    $("description").value = e.description || "";
+    if (e.amount) { setAmount(e.amount); if (e.sign < 0) { amountSign = -1; renderAmount(); } }
+    if (e.method) selectMethod(e.method);
+    toast("Filled from history", "ok");
+  }
+  function wireAutocomplete(inputId, panelId) {
+    const input = $(inputId), panel = $(panelId);
+    let active = -1, items = [];
+    function close() { panel.classList.add("hidden"); panel.innerHTML = ""; active = -1; items = []; }
+    function open(matches) {
+      items = matches;
+      if (!matches.length) { close(); return; }
+      panel.innerHTML = matches.map(suggestionRowHtml).join("");
+      panel.classList.remove("hidden");
+      active = -1;
+      panel.querySelectorAll(".ac-opt").forEach((el, i) => {
+        el.addEventListener("mousedown", (ev) => { ev.preventDefault(); applyHistoryEntry(items[i]); close(); });
+      });
+    }
+    function highlight() {
+      panel.querySelectorAll(".ac-opt").forEach((el, i) => el.classList.toggle("active", i === active));
+    }
+    input.addEventListener("input", () => open(matchHistory(input.value)));
+    input.addEventListener("focus", () => { if (input.value.trim()) open(matchHistory(input.value)); });
+    input.addEventListener("keydown", (e) => {
+      if (panel.classList.contains("hidden")) return;
+      if (e.key === "ArrowDown") { e.preventDefault(); active = Math.min(active + 1, items.length - 1); highlight(); }
+      else if (e.key === "ArrowUp") { e.preventDefault(); active = Math.max(active - 1, 0); highlight(); }
+      else if (e.key === "Enter" && active >= 0) { e.preventDefault(); applyHistoryEntry(items[active]); close(); }
+      else if (e.key === "Escape") { close(); }
+    });
+    input.addEventListener("blur", () => setTimeout(close, 120));
+  }
+
+  // =========================================================================
+  // Geolocation — start positioning on load so a fix is ready by submit time
+  // =========================================================================
+  function setGeoStatus(text, kind) {
+    const el = $("geoStatus");
+    if (!el) return;
+    el.textContent = text || "";
+    el.className = "geo-status" + (kind ? " " + kind : "");
+  }
+  function onGeoOk(pos) {
+    const c = pos && pos.coords;
+    if (!c) return;
+    // Keep the newest fix; prefer it when it is at least as accurate, but a
+    // fresh fix always wins so the location tracks the user as they move.
+    lastPosition = {
+      lat: c.latitude, lon: c.longitude,
+      accuracy: c.accuracy != null ? Math.round(c.accuracy) : null,
+      at: new Date().toISOString()
+    };
+    const acc = lastPosition.accuracy != null ? ` (±${lastPosition.accuracy} m)` : "";
+    setGeoStatus("Location ready" + acc, "ok");
+  }
+  function onGeoErr(err) {
+    // 1 = permission denied, 2 = unavailable, 3 = timeout
+    const msg = err && err.code === 1
+      ? "Location off — transaction will save without it"
+      : "Location unavailable — saving without it";
+    setGeoStatus(msg, "warn");
+  }
+  function startGeolocation() {
+    if (!("geolocation" in navigator)) { setGeoStatus("Location not supported on this device", "warn"); return; }
+    setGeoStatus("Getting location…");
+    try {
+      geoWatchId = navigator.geolocation.watchPosition(onGeoOk, onGeoErr, {
+        enableHighAccuracy: true, maximumAge: 30000, timeout: 27000
+      });
+    } catch (_) { setGeoStatus("Location unavailable — saving without it", "warn"); }
+  }
+
+  // =========================================================================
   // Submit + offline outbox (per mission)
   // =========================================================================
   function loadOutbox(m) { try { return JSON.parse(localStorage.getItem(outboxKey(m)) || "[]"); } catch (_) { return []; } }
@@ -600,7 +723,6 @@
     document.querySelectorAll("#methodRow .seg").forEach((x) => x.setAttribute("aria-pressed", "false"));
     ["receiptPreview", "secondPreview"].forEach((id) => { $(id).innerHTML = ""; $(id).classList.add("hidden"); });
     $("secondReceiptField").classList.add("hidden");
-    $("methodNote").classList.add("hidden");
     renderSignaturePreview();
   }
   function wireSubmit() {
@@ -614,12 +736,14 @@
         description: $("description").value.trim(), amount: amountValue(),
         currency: CURRENCY, method, receiptImage,
         secondReceiptImage: SECOND_RECEIPT[method] ? secondImage : "",
-        signature, clientCreatedAt: new Date().toISOString(), logged: false
+        signature, location: lastPosition,   // captured in the background since load
+        clientCreatedAt: new Date().toISOString(), logged: false
       };
       const btn = $("submitBtn"); btn.disabled = true; btn.textContent = "Saving...";
       try { await postTransaction(tx); toast(`Saved to cloud (${titleCase(mission)})`, "ok"); }
       catch (_) { const ob = loadOutbox(); ob.push(tx); saveOutbox(ob); toast("Saved offline - will sync later", "ok"); }
       pushRecent(tx); renderRecent();        // local recent list, no extra call
+      pushHistory(tx);                       // learn for autocomplete next time
       if (method === "wave") await saveWaveBalance(currentWave() - tx.amount);
       resetForm();
       btn.disabled = false; btn.textContent = "Save transaction";
@@ -650,9 +774,12 @@
     wireSignature();
     wireWave();
     wireSubmit();
+    wireAutocomplete("beneficiary", "benAcPanel");
+    wireAutocomplete("description", "descAcPanel");
     renderAmount();
     renderSignaturePreview();
     setMission(currentMission());  // loads balance + outbox + recent for the mission
+    startGeolocation();            // begin positioning now; fix ready by submit
     if (apiBase()) syncOutbox(true);
   });
 })();

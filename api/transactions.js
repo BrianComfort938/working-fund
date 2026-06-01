@@ -29,6 +29,17 @@ function cleanSignature(sig) {
   return { w: Math.round(Number(sig.w) || 0), h: Math.round(Number(sig.h) || 0), s: strokes };
 }
 
+// Keep only a valid GPS fix: finite lat/lon in range. Returns null otherwise.
+function cleanLocation(loc) {
+  if (!loc || typeof loc !== "object") return null;
+  const lat = Number(loc.lat), lon = Number(loc.lon);
+  if (!isFinite(lat) || !isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+  const out = { lat, lon };
+  if (loc.accuracy != null && isFinite(Number(loc.accuracy))) out.accuracy = Math.round(Number(loc.accuracy));
+  if (loc.at) out.at = String(loc.at).slice(0, 40);
+  return out;
+}
+
 module.exports = async (req, res) => {
   if (withCors(req, res)) return;
   try {
@@ -49,6 +60,7 @@ module.exports = async (req, res) => {
         receiptImage: toBinary(body.receiptImage),
         secondReceiptImage: toBinary(body.secondReceiptImage || body.waveReceiptImage),
         signature: cleanSignature(body.signature),
+        location: cleanLocation(body.location),
         clientCreatedAt: body.clientCreatedAt || null,
         createdAt: new Date(),     // authoritative server timestamp
         logged: false,

@@ -166,6 +166,15 @@
     if (t.hasSignature) media += `<figure><figcaption>Signature</figcaption><canvas class="sig-box" id="sigCv" width="230" height="86"></canvas></figure>`;
     if (!media) media = `<span class="none">No receipts or signature attached</span>`;
 
+    const loc = t.location;
+    let locHtml = `<span class="rec-value muted">Not captured</span>`;
+    if (loc && typeof loc.lat === "number" && typeof loc.lon === "number") {
+      const ll = `${loc.lat.toFixed(6)}, ${loc.lon.toFixed(6)}`;
+      const acc = loc.accuracy != null ? ` (±${loc.accuracy} m)` : "";
+      const url = `https://www.google.com/maps?q=${loc.lat},${loc.lon}`;
+      locHtml = `<a class="rec-value loc-link" href="${url}" target="_blank" rel="noopener">${esc(ll)}${esc(acc)} &#8599;</a>`;
+    }
+
     wrap.innerHTML = `
       <div class="rec-field">
         <label>Beneficiary</label>
@@ -198,6 +207,10 @@
       <div class="rec-field">
         <label>Recorded</label>
         <div class="rec-value">${fmtWhen(t.recordedAt)} &middot; <span class="mission-pill ${t.mission}">${titleCase(t.mission)}</span></div>
+      </div>
+      <div class="rec-field">
+        <label>Location</label>
+        ${locHtml}
       </div>
       <div class="rec-field">
         <label>Attachments</label>
@@ -276,9 +289,14 @@
     if (!t) return;
     try {
       const res = await api(`/api/approve/${t.id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(editPayload(t)) });
-      window.open(`/print/${t.id}`, "_blank");
+      // The server prints silently (no pop-up) when it can. It returns
+      // printed:false only when this machine can't print silently, in which
+      // case we fall back to opening the print tab so nothing is lost.
+      if (!res.printed) window.open(`/print/${t.id}`, "_blank");
+      // res.rollover is cleared by the server once the backup batch prints
+      // silently; if it's still set, that machine needs the tab fallback.
       if (res.rollover) { toast("CSV hit 100 lines - printing backup sheet", "ok"); window.open(`/print/csv-batch/${res.rollover}`, "_blank"); }
-      else toast("Approved & printing", "ok");
+      else toast(res.printed ? "Approved & printed" : "Approved & printing", "ok");
       pushHist(HKEY_COMMITTED, snapshot(t));
       removeCurrent(true);
     } catch (e) { toast("Approve failed", "err"); }

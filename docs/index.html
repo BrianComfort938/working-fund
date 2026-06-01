@@ -46,7 +46,10 @@
 
       <label class="field">
         <span class="field-label">Beneficiary</span>
-        <input id="beneficiary" type="text" placeholder="Full name" required>
+        <div class="ac" id="benAc">
+          <input id="beneficiary" type="text" placeholder="Full name" required autocomplete="off">
+          <div class="ac-panel hidden" id="benAcPanel" role="listbox"></div>
+        </div>
       </label>
 
       <!-- Custom account dropdown: filter by code, two columns (code | account) -->
@@ -71,7 +74,10 @@
 
       <label class="field">
         <span class="field-label">Description</span>
-        <textarea id="description" rows="2" placeholder="Purpose of the expense"></textarea>
+        <div class="ac" id="descAc">
+          <textarea id="description" rows="2" placeholder="Purpose of the expense" autocomplete="off"></textarea>
+          <div class="ac-panel hidden" id="descAcPanel" role="listbox"></div>
+        </div>
       </label>
 
       <div class="field">
@@ -91,7 +97,6 @@
           <button type="button" class="seg" data-method="wave">Wave</button>
           <button type="button" class="seg" data-method="orange">Orange Money</button>
         </div>
-        <div id="methodNote" class="method-note hidden">This amount will be subtracted from the Wave balance.</div>
       </div>
 
       <div class="field">
@@ -129,6 +134,7 @@
         </div>
       </div>
 
+      <div id="geoStatus" class="geo-status" aria-live="polite"></div>
       <button type="submit" class="btn primary big" id="submitBtn">Save transaction</button>
     </form>
 

@@ -139,7 +139,28 @@ optgroup { font-style: normal; }
 .amount-preview { font-family: var(--mono); font-size: 14px; color: var(--muted); }
 .amount-preview.neg { color: var(--danger); }
 
-.method-note { font-size: 12.5px; color: var(--blue); }
+/* Geolocation status line (above the submit button) */
+.geo-status { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; min-height: 16px; }
+.geo-status:not(:empty)::before {
+  content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: none;
+}
+.geo-status.ok { color: var(--ok); }
+.geo-status.warn { color: var(--amber); }
+
+/* Autocomplete (typeahead) — suggestions drawn from past transactions */
+.ac { position: relative; }
+.ac-panel {
+  position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 25;
+  background: var(--panel); border: 1px solid var(--border-strong); border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(20, 33, 42, .22); padding: 4px; max-height: 46vh; overflow: auto;
+}
+.ac-opt {
+  display: flex; flex-direction: column; gap: 2px; padding: 8px 10px;
+  cursor: pointer; border-radius: var(--radius);
+}
+.ac-opt:hover, .ac-opt.active { background: var(--blue-soft); }
+.ac-opt .ac-who { font-size: 14px; }
+.ac-opt .ac-meta { font-size: 11.5px; color: var(--muted); }
 
 /* Presets — compact quick-fill chips (each no taller than one row) */
 .presets-head { display: flex; align-items: center; justify-content: space-between; }

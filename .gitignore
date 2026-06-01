@@ -2,6 +2,7 @@
 .env
 .env.*
 *.local
+local/secret_config.py
 
 # Python
 __pycache__/

@@ -1,6 +1,9 @@
 """MongoDB Atlas access via pymongo. Returns None from fetch when no MONGODB_URI
-is configured, which signals the app to use demo data."""
-import os
+is configured, which signals the app to use demo data.
+
+The connection string is read from local/secret_config.py (a plain variable in
+code, gitignored) rather than an environment variable. Copy
+secret_config.example.py to secret_config.py and paste your string in."""
 
 try:
     from pymongo import MongoClient
@@ -9,24 +12,30 @@ except Exception:  # pymongo not installed yet
     MongoClient = None
     ObjectId = None
 
+try:
+    import secret_config
+    _URI = (getattr(secret_config, "MONGODB_URI", "") or "").strip()
+    _DB_NAME = getattr(secret_config, "MONGODB_DB", "workingfund") or "workingfund"
+except Exception:  # secret_config.py not created yet -> demo mode
+    _URI = ""
+    _DB_NAME = "workingfund"
+
 _collection = None
 
 
 def _connect():
     global _collection
-    uri = os.environ.get("MONGODB_URI")
-    if not uri:
+    if not _URI:
         return None
     if MongoClient is None:
         raise RuntimeError("pymongo is not installed. Run: pip install -r requirements.txt")
     if _collection is None:
-        db_name = os.environ.get("MONGODB_DB", "workingfund")
-        _collection = MongoClient(uri)[db_name]["transactions"]
+        _collection = MongoClient(_URI)[_DB_NAME]["transactions"]
     return _collection
 
 
 def is_cloud():
-    return bool(os.environ.get("MONGODB_URI")) and MongoClient is not None
+    return bool(_URI) and MongoClient is not None
 
 
 def fetch_all(mission=None):

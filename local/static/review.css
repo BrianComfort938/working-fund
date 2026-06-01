@@ -101,6 +101,9 @@ main {
 .rec-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .rec-value { font-size: 16px; padding: 2px 0; }
 .rec-value.mono { font-family: var(--mono); }
+.rec-value.muted { color: var(--muted); font-size: 14px; }
+a.loc-link { color: var(--blue); text-decoration: none; font-family: var(--mono); font-size: 14px; }
+a.loc-link:hover { text-decoration: underline; }
 
 .amount-row { display: flex; gap: 8px; }
 .amount-row input { flex: 1; font-family: var(--mono); font-size: 18px; font-weight: 600; }
