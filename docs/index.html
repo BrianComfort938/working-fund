@@ -54,18 +54,38 @@
 
     <!-- Transaction form -->
     <form id="txForm" class="card" autocomplete="off" novalidate>
+      <!-- Presets: quick-fill common transactions -->
+      <div class="field">
+        <div class="presets-head">
+          <span class="field-label">Quick presets</span>
+        </div>
+        <div class="presets-row" id="presetsRow"></div>
+      </div>
+
       <label class="field">
         <span class="field-label">Beneficiary</span>
         <input id="beneficiary" type="text" placeholder="Full name" required>
       </label>
 
-      <label class="field">
+      <!-- Custom account dropdown: filter by code, two columns (code | account) -->
+      <div class="field">
         <span class="field-label">Account</span>
-        <select id="account" required>
-          <option value="" disabled selected>Select an account</option>
-        </select>
-      </label>
-      <div id="accountChip" class="account-chip hidden"></div>
+        <div class="combo" id="accountCombo">
+          <button type="button" class="combo-trigger" id="accountTrigger" aria-haspopup="listbox" aria-expanded="false">
+            <span class="combo-value placeholder" id="accountTriggerLabel">Select an account</span>
+            <svg class="combo-chevron" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+              stroke-width="2"><path d="M6 9l6 6 6-6" /></svg>
+          </button>
+          <div class="combo-panel hidden" id="accountPanel">
+            <input class="combo-filter" id="accountFilter" type="text" inputmode="text"
+              placeholder="Filter by code or name" autocomplete="off">
+            <div class="combo-colhead"><span>Code</span><span>Account</span></div>
+            <div class="combo-list" id="accountList" role="listbox"></div>
+            <div class="combo-empty hidden" id="accountEmpty">No matching account</div>
+          </div>
+        </div>
+        <div id="accountChip" class="account-chip hidden"></div>
+      </div>
 
       <label class="field">
         <span class="field-label">Description</span>
@@ -130,6 +150,15 @@
       <button type="submit" class="btn primary big" id="submitBtn">Save transaction</button>
     </form>
 
+    <!-- Recent transactions (read from localStorage; no network call) -->
+    <section class="card recent-card" id="recentCard">
+      <div class="recent-head">
+        <span class="field-label">Recent <em id="recentMissionTag"></em></span>
+        <button id="clearRecent" class="link-btn">Clear</button>
+      </div>
+      <div id="recentList" class="recent-list"></div>
+    </section>
+
     <div id="outbox" class="outbox hidden">
       <span id="outboxText"></span>
       <button id="syncBtn" class="link-btn">Sync now</button>
@@ -152,6 +181,53 @@
         <span class="spacer"></span>
         <button id="closeSettings" class="btn">Close</button>
         <button id="saveSettings" class="btn primary">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Preset add / manage modal -->
+  <div id="presetModal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head"><h2>Presets</h2></div>
+      <p class="hint">A preset fills the account, description, amount and method.
+        Beneficiary, receipts and signature are never filled by a preset.</p>
+
+      <div id="presetManageList" class="preset-manage"></div>
+
+      <div class="preset-form">
+        <div class="field">
+          <span class="field-label">Preset name</span>
+          <input id="pName" type="text" placeholder="e.g. Office rent">
+        </div>
+        <div class="field">
+          <span class="field-label">Account</span>
+          <select id="pAccount"><option value="">None</option></select>
+        </div>
+        <div class="field">
+          <span class="field-label">Description</span>
+          <input id="pDesc" type="text" placeholder="Optional">
+        </div>
+        <div class="two-col">
+          <div class="field">
+            <span class="field-label">Amount</span>
+            <input id="pAmount" type="text" inputmode="numeric" placeholder="Optional">
+          </div>
+          <div class="field">
+            <span class="field-label">Method</span>
+            <select id="pMethod">
+              <option value="">None</option>
+              <option value="cash">Cash</option>
+              <option value="wave">Wave</option>
+              <option value="orange">Orange Money</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <span class="spacer"></span>
+        <button id="cancelPreset" class="btn">Close</button>
+        <button id="savePreset" class="btn primary">Save preset</button>
       </div>
     </div>
   </div>
