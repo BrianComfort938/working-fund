@@ -258,6 +258,12 @@
     if (isNaN(d)) return iso;
     return d.toLocaleString(undefined, { weekday: "short", year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
   }
+  function fmtShortDate(iso) {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (isNaN(d)) return String(iso).slice(0, 10);
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  }
 
   // ---- REVIEW view: editable-by-default form ----
   function renderReview() {
@@ -318,10 +324,6 @@
         <label>Attachments</label>
         <div class="receipts">${media}</div>
       </div>
-      <div class="rec-field similar-field hidden" id="similarField">
-        <label>Possible duplicates &amp; similar past entries</label>
-        <div id="similarList" class="similar-list"></div>
-      </div>
       <div class="rec-actions">
         <button type="button" class="btn approve" id="actApprove">Approve &amp; print <kbd>Enter</kbd></button>
         <button type="button" class="btn skip" id="actSkip">Skip</button>
@@ -374,15 +376,12 @@
     list.innerHTML = matches.map((m) => {
       const neg = m.amount < 0;
       const amt = (neg ? "-" : "") + groupDigits(Math.abs(m.amount)) + " " + (m.currency || "XOF");
-      const color = seriesColor(m.account_name || ACCOUNT_CODES[m.account_code]);
-      const tag = m.match === "both" ? "name + amount" : (m.match === "amount" ? "same amount" : "same name");
-      const when = m.recorded_at ? fmtWhen(m.recorded_at) : "";
-      return `<div class="similar-row match-${esc(m.match)}">` +
-        `<span class="s-code" style="color:${color}">${esc(m.account_code || "--")}</span>` +
-        `<span class="s-main"><span class="s-who">${esc(sentenceCase(m.beneficiary))}</span>` +
-        `<span class="s-meta">${esc(when)}${when ? " · " : ""}${esc(methodLabel(m.method))}</span></span>` +
-        `<span class="s-right"><span class="s-amt ${neg ? "neg" : ""}">${esc(amt)}</span>` +
-        `<span class="s-tag">${esc(tag)}</span></span></div>`;
+      const when = m.recorded_at ? fmtShortDate(m.recorded_at) : "";
+      const meta = [when, methodLabel(m.method)].filter(Boolean).join(" · ");
+      return `<div class="similar-row">` +
+        `<span class="s-who">${esc(sentenceCase(m.beneficiary))}</span>` +
+        `<span class="s-amt">${esc(amt)}</span>` +
+        (meta ? `<span class="s-meta">${esc(meta)}</span>` : "") + `</div>`;
     }).join("");
     field.classList.remove("hidden");
   }
