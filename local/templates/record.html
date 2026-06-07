@@ -26,7 +26,40 @@
             height: 100%;
             display: flex;
             flex-direction: column;
+            position: relative;
 
+        }
+
+        /* Faint metadata watermark down the right margin, rotated to read
+           upward (bottom-to-top). Sits in the gap between the form table and
+           the page edge so it never overlaps the printed content. */
+        .watermark {
+            position: absolute;
+            top: 0;
+            right: 2px;
+            height: 45%;
+            display: flex;
+            flex-direction: row-reverse;
+            align-items: center;
+            justify-content: center;
+            gap: 1px;
+            pointer-events: none;
+        }
+
+        .watermark .wm-line {
+            writing-mode: vertical-rl;
+            transform: rotate(180deg);
+            white-space: nowrap;
+            font-size: 6pt;
+            line-height: 1;
+            letter-spacing: .04em;
+            color: #c2c2c2;
+        }
+
+        .watermark .wm-lab {
+            font-weight: 700;
+            color: #adadad;
+            padding-right: 3px;
         }
 
         .left {
@@ -42,8 +75,6 @@
             border: none !important;
         }
 
-
-        /* --- TOP HALF: THE FORM (Exactly 50%) --- */
         .form-section {
             height: 45%;
             padding: 30px 40px;
@@ -133,7 +164,6 @@
 
         }
 
-        /* --- BOTTOM HALF: IMAGES (Exactly 50%) --- */
         .receipts-section {
 
             height: 50%;
@@ -156,7 +186,6 @@
             overflow: hidden;
         }
 
-        /* No divider line after the last (or only) receipt. */
         .receipt-container:last-child {
             border-right: none;
         }
@@ -176,13 +205,18 @@
                 -webkit-print-color-adjust: exact;
             }
 
-
         }
     </style>
 </head>
 
 <body>
     <div class="page-container">
+        <div class="watermark" aria-hidden="true">
+            <div class="wm-line"><span class="wm-lab">ID</span>{{ db_id }}</div>
+            <div class="wm-line"><span class="wm-lab">TIME</span>{{ printed_at }}</div>
+            <div class="wm-line"><span class="wm-lab">WF</span>{{ fund_period }}</div>
+            <div class="wm-line"><span class="wm-lab">TABLE</span>{{ db_table }}</div>
+        </div>
         <div class="form-section">
             <table>
                 <tr>
@@ -232,7 +266,6 @@
                     <td class="right bold" style="font-size: 14pt;">{{ amount_str }}</td>
                 </tr>
             </table>
-
 
             <table>
                 <tr>

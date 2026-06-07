@@ -1,13 +1,7 @@
-// /api/transactions
-//   POST -> create a new (unlogged) transaction
-//   GET  -> list unlogged transactions (what the local script pulls); ?all=1 = everything
 const { Binary } = require("mongodb");
 const { getDb } = require("./_lib/db");
 const { withCors, readBody } = require("./_lib/cors");
 
-// Receipts arrive as compressed JPEG data URLs. Storing the raw bytes as BSON
-// Binary (instead of the Base64 string) is ~33% smaller and keeps the free-tier
-// 512 MB going much further. Returns a Binary, or "" when there is no image.
 function toBinary(dataUrl) {
   if (!dataUrl || typeof dataUrl !== "string") return "";
   const comma = dataUrl.indexOf(",");
@@ -19,7 +13,6 @@ function toBinary(dataUrl) {
   }
 }
 
-// Keep only valid, compact signature data: integer-rounded stroke coordinates.
 function cleanSignature(sig) {
   if (!sig || !Array.isArray(sig.s) || !sig.s.length) return null;
   const strokes = sig.s
@@ -29,7 +22,6 @@ function cleanSignature(sig) {
   return { w: Math.round(Number(sig.w) || 0), h: Math.round(Number(sig.h) || 0), s: strokes };
 }
 
-// Keep only a valid GPS fix: finite lat/lon in range. Returns null otherwise.
 function cleanLocation(loc) {
   if (!loc || typeof loc !== "object") return null;
   const lat = Number(loc.lat), lon = Number(loc.lon);
@@ -62,7 +54,7 @@ module.exports = async (req, res) => {
         signature: cleanSignature(body.signature),
         location: cleanLocation(body.location),
         clientCreatedAt: body.clientCreatedAt || null,
-        createdAt: new Date(),     // authoritative server timestamp
+        createdAt: new Date(),
         logged: false,
       };
       const r = await col.insertOne(doc);

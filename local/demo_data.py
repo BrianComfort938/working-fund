@@ -1,6 +1,3 @@
-"""Sample transactions used when MONGODB_URI is not set, so the review app is
-fully testable without a cloud connection. Includes both missions so the
-East/South filter is demonstrable."""
 import base64
 from datetime import datetime, timezone, timedelta
 
@@ -19,14 +16,12 @@ def _svg_receipt(label, color):
     return "data:image/svg+xml;base64," + b64
 
 
-# A small sample signature (compact vector strokes: {w,h,s:[[x,y,...]]}).
 _DEMO_SIG = {
     "w": 240, "h": 90,
     "s": [[20, 60, 40, 30, 60, 60, 80, 35, 100, 62, 120, 40],
           [125, 55, 150, 52, 175, 56, 200, 50]],
 }
 
-# Fixed base date so the demo is stable run-to-run.
 _NOW = datetime(2026, 1, 19, 14, 30, tzinfo=timezone.utc)
 
 SAMPLES = [
@@ -61,6 +56,21 @@ SAMPLES = [
         "currency": "XOF", "method": "wave", "createdAt": _NOW - timedelta(days=1),
         "receiptImage": _svg_receipt("MAIN", "#6a3d9a"),
         "secondReceiptImage": _svg_receipt("WAVE", "#00618a"),
+        "signature": _DEMO_SIG,
+    },
+    {
+        "_id": "demo5", "mission": "east", "beneficiary": "Elder Mensah",
+        "accountCode": "00", "accountName": "400-5102 Travel In-field",
+        "description": "Transport en commun pour un rendez-vous", "amount": 4500,
+        "currency": "XOF", "method": "cash", "createdAt": _NOW + timedelta(minutes=3),
+        "receiptImage": _svg_receipt("MAIN", "#2e7d32"), "secondReceiptImage": "",
+    },
+    {
+        "_id": "demo6", "mission": "east", "beneficiary": "Sister Abara",
+        "accountCode": "13", "accountName": "000-5500 Miscellaneous",
+        "description": "Petites fournitures de bureau", "amount": 8000,
+        "currency": "XOF", "method": "cash", "createdAt": _NOW + timedelta(minutes=11),
+        "receiptImage": _svg_receipt("MAIN", "#00618a"), "secondReceiptImage": "",
         "signature": _DEMO_SIG,
     },
 ]

@@ -1,20 +1,3 @@
-"""Local Working Fund review app.
-
-On run it pulls ALL transactions from MongoDB Atlas (or demo data) and serves an
-editable, keyboard-driven review page. Each transaction is editable on load.
-
-Per transaction the reviewer can:
-  - Approve  -> save locally (SQLite + CSV + receipts + signature), print the A4
-                record, then DELETE it from the cloud (incl. receipts/signature).
-  - Skip     -> leave it on the cloud (hidden only for this session).
-  - Delete   -> DELETE it from the cloud (incl. receipts/signature), no local save.
-
-A browser-side History page lists recently approved / deleted transactions and can
-reverse them: while the app is running a reversal restores the full transaction to
-the queue (and undoes the local record for approved ones).
-
-    python app.py            # reads MONGODB_URI from secret_config.py
-"""
 import base64
 import threading
 import webbrowser
@@ -26,20 +9,16 @@ import cloud
 import storage
 import mysql_ledger
 import printing
+import settings
 
 app = Flask(__name__)
 
-# Single local user -> simple in-memory session state.
-# "all" holds every transaction pulled from the cloud; the UI shows one mission.
-# "handled" keeps recently approved/deleted full transactions (with images) so the
-# print view still works after removal and so History can fully restore them.
 STATE = {"all": [], "mission": "east", "period": "000", "handled": {}}
 MISSIONS = ("east", "south")
 HANDLED_CAP = 60
 
 METHOD_LABELS = {"cash": "ESPÈCES", "wave": "WAVE", "orange": "ORANGE"}
 
-# Exact account codes (KEEP EXACT).
 ACCOUNT_CODES = {
     "00": "400-5102 Travel In-field", "01": "400-5700 Furnishings YM",
     "02": "400-5930 Food and Personal Items", "03": "400-5868 Utilities YM",
@@ -62,7 +41,6 @@ ACCOUNT_CODES = {
 
 
 def _img_to_data_url(val):
-    """Accept a Base64 data URL (str) or raw JPEG bytes (BSON Binary) -> data URL."""
     if not val:
         return ""
     if isinstance(val, str):
@@ -98,23 +76,18 @@ def _to_view(doc):
 
 
 def load_queue():
-    docs = cloud.fetch_all()  # ALL cloud transactions
+    docs = cloud.fetch_all()
     if docs is None:
         import demo_data
         docs = demo_data.SAMPLES
-        app.logger.info("No MONGODB_URI - running in DEMO mode with sample data.")
+        app.logger.info("No MONGODB_URI, running in DEMO mode with sample data.")
     STATE["all"] = [_to_view(d) for d in docs]
 
 
 def reload_queue():
-    """Re-fetch from the cloud and rebuild the queue so a browser reload sees the
-    most recent transactions (previously this only happened at server startup, so
-    new submissions required a restart). Transactions already approved/deleted in
-    this session live in STATE['handled'] and are kept out of the rebuilt queue.
-    Returns True on a real cloud refresh, False in demo mode."""
     docs = cloud.fetch_all()
     if docs is None:
-        return False  # demo mode: keep the sample queue as-is
+        return False
     handled = STATE["handled"]
     STATE["all"] = [v for v in (_to_view(d) for d in docs) if v["id"] not in handled]
     return True
@@ -147,8 +120,8 @@ def _light(t):
     out["hasReceipt"] = bool(t["receiptImage"])
     out["hasSecondReceipt"] = bool(t["secondReceiptImage"])
     out["hasSignature"] = bool(t.get("signature"))
-    out["signature"] = t.get("signature")  # compact strokes; small enough to inline
-    out["location"] = t.get("location")    # {lat, lon, accuracy, at} or None
+    out["signature"] = t.get("signature")
+    out["location"] = t.get("location")
     return out
 
 
@@ -193,7 +166,6 @@ def _apply_edits(t, data):
 def _remember_handled(t):
     STATE["handled"][t["id"]] = t
     if len(STATE["handled"]) > HANDLED_CAP:
-        # drop oldest insertion(s)
         for k in list(STATE["handled"].keys())[:-HANDLED_CAP]:
             STATE["handled"].pop(k, None)
 
@@ -205,9 +177,6 @@ def index():
 
 @app.route("/api/state")
 def api_state():
-    # Refresh from the cloud on every load so a browser reload shows the latest
-    # transactions (no server restart needed). A transient failure just keeps the
-    # current in-memory queue.
     try:
         reload_queue()
     except Exception as e:
@@ -232,9 +201,6 @@ def api_mission():
 
 @app.route("/api/similar/<tx_id>")
 def api_similar(tx_id):
-    """Recent local entries (SQLite + CSV) similar to the transaction under
-    review — same beneficiary name (Elder/Sister etc. ignored) or same amount —
-    to help the reviewer catch duplicates."""
     t = _find_any(tx_id)
     if not t:
         return jsonify({"matches": []})
@@ -257,6 +223,30 @@ def api_period():
         return jsonify({"error": "max period is 999"}), 400
     STATE["period"] = f"{val:03d}"
     return jsonify({"period": STATE["period"]})
+
+
+@app.route("/api/settings")
+def api_get_settings():
+    return jsonify({
+        "mysql": settings.mysql_config(),
+        "mysqlDriver": mysql_ledger.driver_available(),
+    })
+
+
+@app.route("/api/settings", methods=["POST"])
+def api_save_settings():
+    mysql = (request.json or {}).get("mysql") or {}
+    table = mysql.get("MYSQL_TABLE")
+    if table not in (None, "") and not settings.valid_table_name(table):
+        return jsonify({"error": "Table name may contain only letters, numbers, and underscores."}), 400
+    return jsonify({"ok": True, "mysql": settings.update(mysql)})
+
+
+@app.route("/api/settings/test-mysql", methods=["POST"])
+def api_test_mysql():
+    mysql = (request.json or {}).get("mysql") or {}
+    ok, message = mysql_ledger.test_connection(overrides=mysql)
+    return jsonify({"ok": ok, "message": message})
 
 
 @app.route("/api/receipt/<tx_id>/<which>")
@@ -288,36 +278,39 @@ def api_approve(tx_id):
     t = _find(tx_id)
     if not t:
         abort(404)
-    _apply_edits(t, request.json or {})
+    data = request.json or {}
+    _apply_edits(t, data)
     period = STATE["period"]
-    # 1) save receipts + signature locally
-    storage.save_receipt(t["id"], t.get("receiptImage"), "main")
-    storage.save_receipt(t["id"], t.get("secondReceiptImage"), "second")
     storage.save_signature(t["id"], t.get("signature"))
-    # 2) persist locally
     storage.write_sqlite(t, period)
     storage.append_csv(t, period)
     rollover = storage.rollover_if_needed()
-    # 2b) mirror into the local MySQL ledger (best-effort; never blocks approve)
     mysql_ledger.write(t, period)
-    # 3) print the A4 record. Try silent (no pop-up) printing first; if this
-    #    machine can't (no Selenium/Chrome), tell the client to open the print
-    #    tab so a printout is never lost.
+    # Drop any receipts the reviewer chose to leave off the printed record. Storage
+    # never keeps the images, so this only affects what gets printed. Both the
+    # server side render and the print tab fallback read this same copy in memory.
+    exclude = set(data.get("excludeReceipts") or [])
+    if "main" in exclude:
+        t["receiptImage"] = ""
+    if "second" in exclude:
+        t["secondReceiptImage"] = ""
     printed = printing.print_html_async(_render_record_html(t, auto_print=False), tag="record")
-    # 3b) if the CSV rolled over, print that backup batch the same way.
     if rollover:
         batch_html = _render_csv_batch_html(rollover, auto_print=False)
-        if batch_html and printing.print_html_async(batch_html, tag="csvbatch"):
-            rollover = None  # printed silently -> client should not open a tab
-    # 4) keep full copy for printing + possible reversal, then delete from cloud
+        if batch_html:
+            # Save a one-page PDF backup of the 100 archived rows, then also send
+            # it to the printer if this machine can. Either may be unavailable;
+            # the CSV in printed-batches/ is the durable copy regardless.
+            printing.save_pdf_async(batch_html, storage.batch_pdf_path(rollover), tag="csvbatch")
+            if printing.print_html_async(batch_html, tag="csvbatch"):
+                rollover = None
     _remember_handled(t)
     try:
-        cloud.delete_tx(t["id"])   # removes the doc and its receipts/signature
+        cloud.delete_tx(t["id"])
     except Exception as e:
         app.logger.warning("cloud delete (approve) failed: %s", e)
-    # 5) drop from queue
+    storage.delete_receipts(t["id"])
     STATE["all"] = [x for x in STATE["all"] if x["id"] != t["id"]]
-    # printed=True -> client must NOT open a tab; printed=False -> fall back to it.
     return jsonify({"ok": True, "rollover": rollover, "printed": printed})
 
 
@@ -328,7 +321,7 @@ def api_delete(tx_id):
         abort(404)
     _remember_handled(t)
     try:
-        cloud.delete_tx(t["id"])   # removes the doc and its receipts/signature
+        cloud.delete_tx(t["id"])
     except Exception as e:
         app.logger.warning("cloud delete failed: %s", e)
     STATE["all"] = [x for x in STATE["all"] if x["id"] != t["id"]]
@@ -341,7 +334,6 @@ def api_restore():
     tx_id = data.get("id")
     status = data.get("status")
     snap = data.get("tx") or {}
-    # Prefer the full cached transaction (has images); fall back to snapshot text.
     tx = STATE["handled"].pop(tx_id, None)
     if tx is None:
         tx = {
@@ -353,7 +345,7 @@ def api_restore():
             "receiptImage": "", "secondReceiptImage": "", "signature": snap.get("signature"),
         }
     if status == "committed":
-        storage.remove_transaction(tx_id)   # undo the local record
+        storage.remove_transaction(tx_id)
     if not _find(tx["id"]):
         STATE["all"].insert(0, tx)
     return jsonify({"ok": True, "counts": _mission_counts(),
@@ -361,9 +353,6 @@ def api_restore():
 
 
 def _render_record_html(t, auto_print):
-    """Render the A4 record for a transaction to an HTML string. `auto_print`
-    adds the in-page window.print() trigger used by the visible-tab fallback;
-    the silent printer drives printing itself and passes auto_print=False."""
     date_iso, date_fr = "", ""
     if t["recordedAt"]:
         try:
@@ -380,6 +369,10 @@ def _render_record_html(t, auto_print):
         amount_str=_fmt_amount(t["amount"], t["currency"]),
         main_img=t.get("receiptImage", ""), wave_img=t.get("secondReceiptImage", ""),
         signature_svg=_signature_svg(t.get("signature")),
+        db_id=t.get("id", ""),
+        db_table=mysql_ledger.table_name(),
+        fund_period=STATE["period"],
+        printed_at=datetime.now().strftime("%Y-%m-%d %H:%M"),
         auto_print=auto_print,
     )
 
@@ -392,12 +385,25 @@ def print_record(tx_id):
     return _render_record_html(t, auto_print=True)
 
 
+def _fmt_date(iso):
+    if not iso:
+        return "—"
+    try:
+        return datetime.fromisoformat(str(iso).replace("Z", "+00:00")).strftime("%d %b %Y")
+    except ValueError:
+        return str(iso)[:10]
+
+
 def _render_csv_batch_html(batch_id, auto_print):
     rows = storage.read_batch(batch_id)
     if not rows:
         return None
+    start, end = storage.batch_date_range(rows)
+    periods = sorted({(r.get("fund_period") or "").strip() for r in rows if (r.get("fund_period") or "").strip()})
     return render_template("csv_batch.html", rows=rows, batch_id=batch_id,
-                           count=len(rows), auto_print=auto_print)
+                           count=len(rows), auto_print=auto_print,
+                           date_start=_fmt_date(start), date_end=_fmt_date(end),
+                           periods=", ".join(periods) or "—")
 
 
 @app.route("/print/csv-batch/<batch_id>")
@@ -413,10 +419,6 @@ def _open_browser(port):
 
 
 def _find_free_port(preferred=5000):
-    """Return the preferred port if free, otherwise the next open one. Prevents
-    the confusing case where a stale/previous instance is still holding 5000 and
-    a fresh run either crashes ('address in use') or the browser opens the old
-    server showing stale data."""
     import socket
     for port in [preferred] + list(range(5001, 5051)):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -427,20 +429,20 @@ def _find_free_port(preferred=5000):
             continue
         finally:
             s.close()
-    return preferred  # fall back; app.run will surface a clear error if taken
+    return preferred
 
 
 def main():
     storage.init_db()
     load_queue()
-    printing.warm_up()  # probe silent-print capability in the background
+    printing.warm_up()
     port = _find_free_port(5000)
     counts = _mission_counts()
     print(f"\n  Working Fund review: {len(STATE['all'])} transaction(s) "
           f"(East {counts['east']}, South {counts['south']}). "
           f"{'(DEMO data)' if not cloud.is_cloud() else ''}")
     if port != 5000:
-        print(f"  (Port 5000 was busy — using {port} instead.)")
+        print(f"  (Port 5000 was busy, so using {port} instead.)")
     print(f"  Open http://127.0.0.1:{port}/  (a browser tab should open automatically)\n")
     threading.Timer(1.0, _open_browser, args=(port,)).start()
     app.run(host="127.0.0.1", port=port, debug=False)

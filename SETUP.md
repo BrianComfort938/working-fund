@@ -18,7 +18,7 @@ Three free services, no credit card needed:
    Replace `PASSWORD` with the real one.
 
 > The database (`workingfund`) and collections (`transactions`, `system_settings`)
-> are created automatically on the first write — nothing to set up by hand.
+> are created automatically on the first write, so there is nothing to set up by hand.
 > Each transaction carries a `mission` field (`east` or `south`); the Wave balance
 > is stored per mission.
 
@@ -34,7 +34,7 @@ branch `main`). Future changes just need `git push`.
 ## 3. Vercel (the secure API)
 
 1. Free account → **Add New… → Project** → import your GitHub repo.
-2. Leave build settings as detected (zero-config: it finds `/api` and installs `mongodb`).
+2. Leave build settings as detected (zero configuration: it finds `/api` and installs `mongodb`).
 3. **Settings → Environment Variables**, add:
 
    | Name             | Value                                                | Required |
@@ -66,10 +66,10 @@ The header should change from "Offline mode" to **"Cloud connected"**.
 
 ## Security model (honest version)
 
-- ✅ Your **database password lives only in Vercel's environment variables** — never
+- ✅ Your **database password lives only in Vercel's environment variables**, never
   in the public GitHub Pages code. This is the important one, and it's handled.
 - ⚠️ The API endpoints themselves are currently **open** (anyone who discovers the
   URL could read/add records). For a personal working fund behind an obscure
   HTTPS URL this is usually acceptable.
-- 🔒 When you want to lock writes behind a password, say so — I'll add a `WRITE_KEY`
+- 🔒 When you want to lock writes behind a password, say so and I'll add a `WRITE_KEY`
   check to the API and a matching key field in the portal's ⚙️ settings.

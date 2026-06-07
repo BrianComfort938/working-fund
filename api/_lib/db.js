@@ -1,10 +1,8 @@
-// Cached MongoDB connection, reused across serverless invocations on Vercel.
 const { MongoClient } = require("mongodb");
 
 const uri = process.env.MONGODB_URI;
 const dbName = process.env.MONGODB_DB || "workingfund";
 
-// Reuse the connection between warm invocations (avoids exhausting Atlas limits).
 let cached = global.__mongo;
 if (!cached) cached = global.__mongo = { promise: null };
 

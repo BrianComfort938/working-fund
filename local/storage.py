@@ -1,5 +1,3 @@
-"""Local persistence: SQLite (MySQL later) + transaction-backup.csv with the
-100-line rollover rule, plus saving receipt images to disk."""
 import os
 import csv
 import json
@@ -93,9 +91,6 @@ def _read_csv_rows():
 
 
 def rollover_if_needed():
-    """If the CSV has more than MAX_CSV_ROWS data rows, move the oldest 100 into an
-    archived batch file (so nothing is lost if a print is cancelled) and rewrite the
-    main CSV without them. Returns the batch id to print, or None."""
     rows = _read_csv_rows()
     if len(rows) <= MAX_CSV_ROWS:
         return None
@@ -121,8 +116,23 @@ def read_batch(batch_id):
         return list(csv.DictReader(f))
 
 
+def batch_pdf_path(batch_id):
+    return os.path.join(BATCH_DIR, f"batch-{batch_id}.pdf")
+
+
+def batch_date_range(rows):
+    """Earliest and latest recorded_at in a batch, as raw ISO strings ("" if none).
+
+    ISO-8601 timestamps sort chronologically as plain strings, so a lexical
+    min/max is enough to find the span of the 100 archived entries.
+    """
+    stamps = sorted(s for s in ((r.get("recorded_at") or "").strip() for r in rows) if s)
+    if not stamps:
+        return "", ""
+    return stamps[0], stamps[-1]
+
+
 def save_receipt(tx_id, data_url, which):
-    """Decode a base64 data URL and write it to receipts/<id>_<which>.<ext>."""
     if not data_url:
         return None
     _ensure_dirs()
@@ -141,9 +151,20 @@ def save_receipt(tx_id, data_url, which):
     return fname
 
 
+def delete_receipts(tx_id):
+    if not tx_id:
+        return
+    for suf in ("_main.jpg", "_main.png", "_main.svg",
+                "_second.jpg", "_second.png", "_second.svg"):
+        p = os.path.join(RECEIPTS_DIR, tx_id + suf)
+        if os.path.exists(p):
+            try:
+                os.remove(p)
+            except OSError:
+                pass
+
+
 def remove_transaction(tx_id):
-    """Undo a local record (used when a committed transaction is reversed): drop its
-    SQLite row, rewrite the CSV without it, and delete its receipt/signature files."""
     if not tx_id:
         return
     try:
@@ -170,8 +191,6 @@ def remove_transaction(tx_id):
                 pass
 
 
-# Honorifics / titles to ignore when comparing beneficiary names. Almost every
-# name starts with one of these, so they carry no signal for duplicate-matching.
 NAME_STOPWORDS = {
     "elder", "elders", "soeur", "soeurs", "sister", "sisters",
     "frere", "frère", "freres", "frères", "brother", "brothers",
@@ -180,9 +199,7 @@ NAME_STOPWORDS = {
 
 
 def _name_tokens(name):
-    """Lowercased, honorific-stripped, de-accented word tokens of a name."""
     s = (name or "").lower()
-    # Drop accents so 'Koné' matches 'kone'.
     repl = {"é": "e", "è": "e", "ê": "e", "ë": "e", "à": "a", "â": "a", "ä": "a",
             "î": "i", "ï": "i", "ô": "o", "ö": "o", "û": "u", "ü": "u", "ç": "c"}
     s = "".join(repl.get(ch, ch) for ch in s)
@@ -191,8 +208,6 @@ def _name_tokens(name):
 
 
 def _all_rows():
-    """Every persisted row from SQLite, plus any CSV rows not already in SQLite
-    (matched by transaction_id). Normalized to the CSV field names, newest first."""
     rows = []
     seen_ids = set()
     try:
@@ -210,7 +225,6 @@ def _all_rows():
         con.close()
     except Exception:
         pass
-    # CSV may hold rows that rolled over / aren't in this DB; include the extras.
     for r in reversed(_read_csv_rows()):
         if r.get("transaction_id") and r["transaction_id"] in seen_ids:
             continue
@@ -219,13 +233,6 @@ def _all_rows():
 
 
 def find_similar(beneficiary, amount, exclude_id="", limit=8, amount_tolerance=0):
-    """Recent local entries (SQLite + CSV) that look similar to the one being
-    reviewed: a shared beneficiary name token (honorifics like Elder/Sister
-    ignored) OR the same/very-close amount. Newest first, de-duplicated.
-
-    Returns a list of dicts: beneficiary, amount, currency, account_code,
-    account_name, recorded_at, method, mission, match ("name" | "amount" | "both").
-    """
     want_tokens = set(_name_tokens(beneficiary))
     try:
         want_amount = int(amount)
@@ -249,7 +256,6 @@ def find_similar(beneficiary, amount, exclude_id="", limit=8, amount_tolerance=0
         if not name_hit and not amount_hit:
             continue
 
-        # De-dupe identical-looking suggestions (same name + amount + date).
         key = (str(r.get("beneficiary", "")).strip().lower(), row_amount, r.get("recorded_at", ""))
         if key in seen:
             continue
@@ -272,12 +278,10 @@ def find_similar(beneficiary, amount, exclude_id="", limit=8, amount_tolerance=0
 
 
 def save_signature(tx_id, sig):
-    """Persist the compact vector-stroke signature next to the receipts as a small
-    JSON file (typically a few hundred bytes), so it can be re-rendered later."""
     if not sig or not sig.get("s"):
         return None
     _ensure_dirs()
     fname = f"{tx_id}_signature.json"
     with open(os.path.join(RECEIPTS_DIR, fname), "w", encoding="utf-8") as f:
-        json.dump(sig, f, separators=(",", ":"))  # no whitespace -> smallest file
+        json.dump(sig, f, separators=(",", ":"))
     return fname

@@ -1,8 +1,8 @@
-/* Working Fund — review app, professional theme modeled on MySQL Workbench. */
 :root {
   --bg: #e9ecef;
   --panel: #ffffff;
   --panel-alt: #f4f6f8;
+  --empty: #d3d9e0;
   --border: #c6ccd4;
   --border-strong: #aab2bd;
   --text: #25323a;
@@ -26,7 +26,6 @@ html, body { margin: 0; background: var(--bg); color: var(--text); font-family: 
 
 .muted { color: var(--muted); }
 
-/* Inline review navigation (replaces the old top banner) */
 .review-nav {
   display: flex; align-items: center; gap: 12px; margin-bottom: 14px;
 }
@@ -43,7 +42,6 @@ html, body { margin: 0; background: var(--bg); color: var(--text); font-family: 
   background: var(--blue-soft); border: 1px solid var(--blue); border-radius: var(--radius); padding: 4px 10px;
 }
 
-/* Mission switch (now lives inside the Settings popup) */
 .mission-switch { display: flex; }
 .mission-tab {
   display: flex; align-items: center; gap: 7px; flex: 1; justify-content: center;
@@ -62,10 +60,8 @@ html, body { margin: 0; background: var(--bg); color: var(--text); font-family: 
 main#reviewView {
   display: grid; grid-template-columns: 200px 1fr 380px; gap: 16px;
   max-width: 1360px; margin: 0 auto; padding: 14px 18px;
-  /* Fit the whole review view in the viewport so the reviewer never scrolls. */
   height: 100vh; box-sizing: border-box; overflow: hidden; align-items: start;
 }
-/* Each column manages its own overflow instead of growing the page. */
 main#reviewView > .col-time,
 main#reviewView > .col-main,
 main#reviewView > .col-side { max-height: calc(100vh - 28px); min-height: 0; }
@@ -76,7 +72,6 @@ main#historyView {
 @media (max-width: 1060px) { main#reviewView { grid-template-columns: 200px 1fr; } }
 @media (max-width: 760px) { main#reviewView { grid-template-columns: 1fr; height: auto; overflow: visible; } }
 
-/* Left timeline banner — recorded time on the full 24h day */
 .col-time { display: flex; min-height: 0; }
 .time-banner {
   background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
@@ -90,19 +85,15 @@ main#historyView {
 }
 .tl-recorded { display: block; font-family: var(--sans); font-size: 12.5px; font-weight: 700; color: var(--text); line-height: 1.25; }
 .tl-head .tl-sub { display: block; margin-top: 3px; font-size: 10px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
-/* The rail sits 48px from the right edge of the banner so notable-time labels
-   fit inside to its right; transaction boxes grow leftward from it. */
 .tl-rail { position: relative; width: 100%; flex: 1; min-height: 360px; }
 .tl-line {
   position: absolute; right: 48px; top: 0; bottom: 0; width: 2px;
   background: linear-gradient(180deg, var(--ok), var(--blue) 55%, var(--amber));
   border-radius: 2px;
 }
-/* Notable-time marks: tick on the line, label to its right */
 .tl-mark { position: absolute; right: 48px; transform: translateY(-50%); display: flex; align-items: center; }
 .tl-tick { width: 8px; height: 8px; border-radius: 50%; background: var(--border-strong); border: 2px solid var(--panel); transform: translateX(50%); }
 .tl-label { position: absolute; left: 10px; font-family: var(--mono); font-size: 10px; color: var(--muted); white-space: nowrap; }
-/* Per-transaction marker: dot on the line, info box to the LEFT */
 .tl-tx { position: absolute; right: 48px; transform: translateY(-50%); display: flex; align-items: center; cursor: pointer; z-index: 2; }
 .tl-txdot { width: 11px; height: 11px; border-radius: 50%; background: var(--muted); border: 2px solid var(--panel); transform: translateX(50%); box-shadow: 0 0 0 1px var(--border-strong); }
 .tl-box {
@@ -116,12 +107,31 @@ main#historyView {
 .tl-tx.current .tl-box { border-color: var(--blue); border-left: 3px solid var(--blue); }
 .tl-tx:hover .tl-box { border-color: var(--blue); }
 
+.tl-cluster { position: absolute; right: 48px; transform: translateY(-50%); display: flex; align-items: center; cursor: ns-resize; z-index: 3; touch-action: none; }
+.tl-cluster .tl-box {
+  width: 132px;
+  box-shadow: 3px 3px 0 -1px var(--panel), 3px 3px 0 0 var(--border-strong),
+              6px 6px 0 -1px var(--panel), 6px 6px 0 0 var(--border-strong),
+              0 2px 4px rgba(20, 33, 42, .10);
+}
+.tl-cluster .tl-box-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 1px; }
+.tl-cluster .tl-box-time { font-family: var(--mono); font-size: 9.5px; color: var(--muted); }
+.tl-cluster .tl-count { font-family: var(--mono); font-size: 9px; font-weight: 700; color: var(--blue); background: var(--blue-soft); border-radius: 8px; padding: 0 5px; }
+.tl-cluster .tl-txdot.cluster {
+  width: 20px; height: 20px; background: var(--amber);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 0 1px var(--border-strong);
+}
+.tl-badge { color: #fff; font-family: var(--mono); font-size: 10px; font-weight: 700; line-height: 1; }
+.tl-cluster.current .tl-box { border-color: var(--blue); border-left: 3px solid var(--blue); }
+.tl-cluster.current .tl-txdot.cluster { box-shadow: 0 0 0 2px var(--blue); }
+.tl-cluster:hover .tl-box { border-color: var(--blue); }
+
 .rec-form, .calendar, .loc-card {
   background: var(--panel); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 18px; box-shadow: 0 1px 2px rgba(20, 33, 42, .05);
 }
 
-/* Side column: Location on top, calendar + duplicates side-by-side, settings last */
 .col-side { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
 .side-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; min-height: 0; flex: 1; }
 .side-row .calendar { margin: 0; }
@@ -138,7 +148,6 @@ main#historyView {
 .loc-meta a { color: var(--blue); text-decoration: none; }
 .loc-meta a:hover { text-decoration: underline; }
 
-/* Settings box (bottom right, under the map) */
 .settings-box {
   display: flex; align-items: center; justify-content: center; gap: 8px;
   padding: 11px 14px; border-radius: var(--radius); cursor: pointer; font-family: inherit;
@@ -147,17 +156,44 @@ main#historyView {
 }
 .settings-box:active { background: var(--border); }
 
-/* Settings popup fields */
 .set-field { display: flex; flex-direction: column; gap: 6px; }
 .set-field > label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; font-weight: 700; }
 .set-field input {
   width: 96px; text-align: center; font-size: 16px; letter-spacing: 3px; font-family: var(--mono);
   background: var(--panel); color: var(--text); border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 8px;
 }
-.shortcuts-list { list-style: none; margin: 0; padding: 0; font-size: 13px; }
-.shortcuts-list li { padding: 4px 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.kt-legend {
+  list-style: none; margin: 4px 0 0; padding: 0; display: grid;
+  grid-template-columns: 1fr 1fr; gap: 5px 16px; font-size: 12.5px; color: var(--text);
+}
+.kt-legend li { display: flex; align-items: center; gap: 7px; }
+.kt-legend kbd { flex: none; }
+.set-note { margin: 0; font-size: 12.5px; color: var(--muted); line-height: 1.45; }
+.set-list { margin: 2px 0; padding-left: 18px; font-size: 12.5px; color: var(--text); line-height: 1.45; }
+.set-list li { margin: 2px 0; }
 
-/* Editable record form — label then control, easy to read */
+/* MySQL ledger settings. Its own section class (not .set-field) so the period
+   field's compact input styling does not leak into these text inputs. */
+.set-section { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--border); padding-top: 14px; }
+.set-sec-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; font-weight: 700; }
+.set-check { display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; color: var(--text); cursor: pointer; }
+.set-check input { width: 16px; height: 16px; cursor: pointer; }
+.set-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px 10px; }
+.set-cell { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.set-cell.wide { grid-column: 1 / -1; }
+.set-cap { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; font-weight: 700; }
+.set-text {
+  width: 100%; text-align: left; letter-spacing: normal; font-size: 14px; font-family: var(--sans);
+  background: var(--panel); color: var(--text); border: 1px solid var(--border-strong);
+  border-radius: var(--radius); padding: 7px 9px;
+}
+.set-text:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-soft); }
+.set-actions { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+.set-actions .spacer { flex: 1; }
+.set-status { margin: 0; font-size: 12.5px; line-height: 1.4; min-height: 1.2em; color: var(--muted); }
+.set-status.ok { color: var(--ok); }
+.set-status.err { color: var(--danger); }
+
 .rec-form { display: flex; flex-direction: column; gap: 14px; }
 .rec-field { display: flex; flex-direction: column; gap: 5px; }
 .rec-field > label {
@@ -171,6 +207,10 @@ main#historyView {
   outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-soft);
 }
 .rec-field textarea { resize: vertical; }
+/* Empty fields stay present but show a darker fill so it reads as "nothing here". */
+.rec-field input.is-empty, .rec-field textarea.is-empty, .rec-field select.is-empty {
+  background: var(--empty);
+}
 .rec-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .rec-value { font-size: 16px; padding: 2px 0; }
 .rec-value.mono { font-family: var(--mono); }
@@ -189,16 +229,58 @@ a.loc-link:hover { text-decoration: underline; }
 .acct-hint { display: inline-flex; align-items: center; gap: 8px; margin-top: 4px; font-size: 12.5px; color: var(--muted); }
 .acct-hint .swatch { width: 11px; height: 11px; border-radius: 2px; }
 
-.receipts { display: flex; gap: 12px; flex-wrap: wrap; }
-.receipts figure { margin: 0; }
-.receipts figcaption { font-size: 11px; color: var(--muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .04em; }
-.receipts img {
-  max-width: 200px; max-height: 240px; border: 1px solid var(--border-strong); border-radius: var(--radius); background: #fff;
-}
+/* Fixed height so the form's spacing never changes with the number of receipts. */
+.receipts { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-start; height: 168px; overflow: hidden; }
+.receipts figure { margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.receipts figcaption { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
 .receipts .sig-box { border: 1px solid var(--border-strong); border-radius: var(--radius); background: #fff; width: 230px; height: 86px; }
-.receipts .none { color: var(--muted); font-size: 13px; }
+.receipts-empty {
+  flex: 1; align-self: stretch; display: flex; align-items: center; justify-content: center;
+  color: var(--muted); font-size: 13px; background: var(--empty);
+  border: 1px dashed var(--border-strong); border-radius: var(--radius);
+}
 
-/* Possible duplicates / similar past entries — clean card beside the calendar */
+/* Receipt thumbnail, hover to enlarge */
+.receipt-img-wrap { position: relative; display: inline-block; cursor: zoom-in; }
+.receipt-thumb {
+  display: block; max-width: 200px; max-height: 110px;
+  border: 1px solid var(--border-strong); border-radius: var(--radius); background: #fff;
+  transition: border-color .12s ease, box-shadow .12s ease;
+}
+.receipt-img-wrap:hover .receipt-thumb { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-soft); }
+
+/* Enlarged preview, fixed so it escapes the scrollable column and never clips */
+.receipt-zoom {
+  position: fixed; top: 50%; left: 50%;
+  transform: translate(-50%, -50%) scale(.97);
+  max-width: 88vw; max-height: 88vh;
+  border: 1px solid var(--border-strong); border-radius: var(--radius);
+  background: #fff; box-shadow: 0 18px 60px rgba(20, 33, 42, .5);
+  opacity: 0; visibility: hidden; pointer-events: none; z-index: 200;
+  transition: opacity .14s ease, transform .14s ease;
+}
+.receipt-img-wrap:hover .receipt-zoom { opacity: 1; visibility: visible; transform: translate(-50%, -50%) scale(1); }
+.receipt-img-wrap:hover::after {
+  content: ""; position: fixed; inset: 0; background: rgba(20, 33, 42, .45);
+  z-index: 199; pointer-events: none;
+}
+
+/* Remove / add-back from printing */
+.receipt-toggle {
+  align-self: stretch; cursor: pointer; font-family: inherit; font-size: 11.5px; font-weight: 600;
+  padding: 5px 8px; border-radius: var(--radius);
+  border: 1px solid var(--border-strong); background: var(--panel-alt); color: var(--text);
+}
+.receipt-toggle:active { background: var(--border); }
+.receipt-fig.excluded .receipt-thumb { opacity: .4; filter: grayscale(1); }
+.receipt-fig.excluded .receipt-toggle { border-color: var(--ok); color: var(--ok); }
+.excluded-tag {
+  display: none; position: absolute; top: 6px; left: 6px; z-index: 1;
+  background: var(--danger); color: #fff; font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .04em; padding: 2px 6px; border-radius: var(--radius);
+}
+.receipt-fig.excluded .excluded-tag { display: block; }
+
 .dup-card {
   background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
   padding: 14px; box-shadow: 0 1px 2px rgba(20, 33, 42, .05);
@@ -233,7 +315,6 @@ a.loc-link:hover { text-decoration: underline; }
 .done .big { font-size: 34px; margin-bottom: 8px; color: var(--ok); }
 .done h2 { font-weight: 600; }
 
-/* Calendar */
 .calendar .cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 .calendar .cal-title { font-weight: 600; font-size: 14px; }
 .calendar .nav {
@@ -248,9 +329,6 @@ a.loc-link:hover { text-decoration: underline; }
 }
 .cal-grid .day.blank { visibility: hidden; }
 .cal-grid .day.has { cursor: pointer; background: var(--panel-alt); border: 1px solid var(--border); }
-.cal-grid .day.has::after {
-  content: ""; position: absolute; bottom: 4px; width: 5px; height: 5px; border-radius: 50%; background: var(--blue);
-}
 .cal-grid .day.current { outline: 2px solid var(--blue); font-weight: 700; }
 .cal-grid .day.today { box-shadow: inset 0 0 0 2px var(--amber); font-weight: 700; }
 .cal-legend { display: flex; gap: 14px; margin-top: 10px; font-size: 11px; color: var(--muted); }
@@ -264,7 +342,6 @@ kbd {
   border-radius: var(--radius); padding: 1px 6px; font-family: var(--mono); font-size: 11.5px;
 }
 
-/* History view */
 #historyView { display: block; max-width: 1120px; }
 .history-head { display: flex; align-items: center; justify-content: space-between; }
 .history-head h2 { margin: 0; font-size: 18px; font-weight: 600; }
@@ -294,9 +371,8 @@ kbd {
 .mission-pill.east  { background: var(--blue-soft); border-color: var(--blue); color: var(--blue); }
 .mission-pill.south { background: #f3e9f7; border-color: #6a3d9a; color: #6a3d9a; }
 
-/* Modal */
 .modal { position: fixed; inset: 0; z-index: 100; background: rgba(45, 60, 69, .55); display: flex; align-items: center; justify-content: center; padding: 16px; }
-.modal-card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; width: 100%; max-width: 440px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 10px 40px rgba(20, 33, 42, .4); }
+.modal-card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; width: 100%; max-width: 440px; max-height: 92vh; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 10px 40px rgba(20, 33, 42, .4); }
 .modal-head { border-bottom: 1px solid var(--border); padding-bottom: 9px; }
 .modal-head h2 { margin: 0; font-size: 15px; font-weight: 600; }
 .modal-actions { display: flex; gap: 8px; align-items: center; }
@@ -312,4 +388,17 @@ kbd {
 }
 .toast.ok { background: #1e5b32; border-color: #154425; }
 .toast.err { background: #8f2018; border-color: #6f180f; }
+
+/* Excel-style key tips: a yellow key badge painted over each control on Alt. */
+.keytip-layer { position: fixed; inset: 0; z-index: 300; pointer-events: none; }
+.keytip {
+  position: fixed; transform: translate(-50%, -50%);
+  background: #ffd23f; color: #1a2228; border: 1px solid #b8910a; border-radius: 3px;
+  padding: 0 7px; font-family: var(--mono); font-size: 12px; font-weight: 700;
+  line-height: 1.7; white-space: nowrap; pointer-events: none;
+  box-shadow: 0 2px 5px rgba(20, 33, 42, .45);
+  animation: keytip-in .1s ease-out;
+}
+@keyframes keytip-in { from { opacity: 0; transform: translate(-50%, -40%); } to { opacity: 1; transform: translate(-50%, -50%); } }
+
 .hidden { display: none !important; }
