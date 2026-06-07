@@ -7,26 +7,23 @@
   <meta name="theme-color" content="#2d3c45">
   <title>Working Fund</title>
   <link rel="stylesheet" href="styles.css">
+  <script>
+    // Set theme before first paint to avoid a flash. app.js keeps it in sync.
+    (function () {
+      var h = new Date().getHours();
+      document.documentElement.setAttribute("data-theme", (h >= 19 || h < 6) ? "dark" : "light");
+    })();
+  </script>
 </head>
 
 <body>
   <main>
-    <!-- Mission -->
-    <section class="card">
-      <span class="field-label">Mission</span>
-      <div class="segmented" id="missionRow" role="group" aria-label="Mission">
-        <button type="button" class="seg" data-mission="east">East</button>
-        <button type="button" class="seg" data-mission="south">South</button>
-      </div>
-    </section>
-
-    <!-- Wave balance -->
     <section class="card wave-card">
       <div class="wave-head">
         <span class="field-label">Wave balance <em id="waveMissionTag"></em></span>
         <button id="editWaveBtn" class="link-btn">Set</button>
       </div>
-      <div id="waveBalance" class="wave-amount">&mdash;</div>
+      <div id="waveBalance" class="wave-amount">N/A</div>
       <div id="waveEditRow" class="wave-edit hidden">
         <input id="waveInput" type="text" inputmode="numeric" placeholder="Enter balance">
         <button id="saveWaveBtn" class="btn small primary">Save</button>
@@ -34,9 +31,7 @@
       </div>
     </section>
 
-    <!-- Transaction form -->
     <form id="txForm" class="card" autocomplete="off" novalidate>
-      <!-- Presets: quick-fill common transactions -->
       <div class="field">
         <div class="presets-head">
           <span class="field-label">Quick presets</span>
@@ -52,7 +47,6 @@
         </div>
       </label>
 
-      <!-- Custom account dropdown: filter by code, two columns (code | account) -->
       <div class="field">
         <span class="field-label">Account</span>
         <div class="combo" id="accountCombo">
@@ -62,8 +56,8 @@
               stroke-width="2"><path d="M6 9l6 6 6-6" /></svg>
           </button>
           <div class="combo-panel hidden" id="accountPanel">
-            <input class="combo-filter" id="accountFilter" type="text" inputmode="text"
-              placeholder="Filter by code or name" autocomplete="off">
+            <input class="combo-filter" id="accountFilter" type="text" inputmode="numeric" pattern="[0-9]*"
+              placeholder="Filter by code" autocomplete="off">
             <div class="combo-colhead"><span>Code</span><span>Account</span></div>
             <div class="combo-list" id="accountList" role="listbox"></div>
             <div class="combo-empty hidden" id="accountEmpty">No matching account</div>
@@ -138,7 +132,6 @@
       <button type="submit" class="btn primary big" id="submitBtn">Save transaction</button>
     </form>
 
-    <!-- Recent transactions (read from localStorage; no network call) -->
     <section class="card recent-card" id="recentCard">
       <div class="recent-head">
         <span class="field-label">Recent <em id="recentMissionTag"></em></span>
@@ -151,11 +144,50 @@
       <span id="outboxText"></span>
       <button id="syncBtn" class="link-btn">Sync now</button>
     </div>
+
+    <details class="card settings-card">
+      <summary class="settings-summary">
+        <span class="field-label">Settings</span>
+        <svg class="settings-chev" viewBox="0 0 24 24" width="16" height="16" fill="none"
+          stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6" /></svg>
+      </summary>
+      <div class="settings-body">
+        <span class="field-label">Local storage on this device</span>
+        <p class="hint">This portal works offline and keeps everything in this browser, on
+          this phone only. Nothing is shared between devices:</p>
+        <ul class="settings-list">
+          <li><strong>Mission:</strong> the fund you last chose.</li>
+          <li><strong>Wave balance:</strong> the latest balance for each mission.</li>
+          <li><strong>Outbox:</strong> transactions saved while offline (with their
+            receipt photos) wait here until they sync, then they are removed.</li>
+          <li><strong>Recent:</strong> the last 10 transactions per mission, shown above.</li>
+          <li><strong>Autofill:</strong> details from past entries to speed up typing
+            (no photos).</li>
+          <li><strong>Presets:</strong> your quick fill buttons.</li>
+        </ul>
+        <p class="hint">Clearing this browser's site data, or the Clear buttons in the app,
+          removes it. Once a transaction syncs, it lives on the server.</p>
+      </div>
+    </details>
+
+    <section class="card mission-card" id="missionCard">
+      <button type="button" class="mission-toggle" id="missionToggle" aria-expanded="false" aria-controls="missionRow">
+        <span class="mission-toggle-text">
+          <span class="field-label">Mission</span>
+          <span class="mission-current" id="missionCurrent">East</span>
+        </span>
+        <svg class="mission-chev" viewBox="0 0 24 24" width="16" height="16" fill="none"
+          stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6" /></svg>
+      </button>
+      <div class="segmented mission-seg hidden" id="missionRow" role="group" aria-label="Mission">
+        <button type="button" class="seg" data-mission="east">East</button>
+        <button type="button" class="seg" data-mission="south">South</button>
+      </div>
+    </section>
   </main>
 
   <div id="toast" class="toast hidden"></div>
 
-  <!-- Preset add / manage modal -->
   <div id="presetModal" class="modal hidden">
     <div class="modal-card">
       <div class="modal-head"><h2>Presets</h2></div>
@@ -202,7 +234,6 @@
     </div>
   </div>
 
-  <!-- Signature modal -->
   <div id="sigModal" class="modal hidden">
     <div class="modal-card sig-card">
       <div class="modal-head"><h2>Signature</h2></div>

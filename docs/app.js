@@ -1,7 +1,6 @@
 (function () {
   "use strict";
 
-  // ---- Exact account codes (KEEP EXACT — do not edit) ----
   const ACCOUNT_CODES = {
     "00": "400-5102 Travel In-field",
     "01": "400-5700 Furnishings YM",
@@ -33,7 +32,7 @@
     "50": "900-5102 Travel, Baggage, Visa and Other",
     "51": "900-5949 Missionary Medical"
   };
-  const ACCOUNT_ORDER = Object.keys(ACCOUNT_CODES).sort(); // by code: 00, 01, ... 51
+  const ACCOUNT_ORDER = Object.keys(ACCOUNT_CODES).sort();
 
   const SERIES_META = {
     "400": { label: "Field", color: "#2e7d32" },
@@ -52,8 +51,6 @@
   const SECOND_RECEIPT = { wave: "Wave receipt", orange: "Orange Money receipt" };
   const METHOD_LABELS = { cash: "Cash", wave: "Wave", orange: "Orange Money" };
 
-  // Default presets (seeded by version; the user can add/remove their own).
-  // Bumping PRESETS_VERSION re-seeds these over any previously stored defaults.
   const PRESETS_VERSION = "2";
   const DEFAULT_PRESETS = [
     { id: "p_sacred",  label: "Return of sacred funds",      accountCode: "02", description: "", amount: 0, method: "cash" },
@@ -63,16 +60,11 @@
     { id: "p_power",   label: "Power bill",                 accountCode: "03", description: "", amount: 0, method: "wave" }
   ];
 
-  // ---- helpers ----
   const $ = (id) => document.getElementById(id);
   const groupDigits = (s) => String(s).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  // Fixed backend URL from config.js — not user-changeable. Any old per-device
-  // override is intentionally ignored (and cleared) so a stale/bad saved URL
-  // can never shadow the correct one.
   localStorage.removeItem("workingfund_api_base");
   const apiBase = () => (cfg.API_BASE_URL || "").replace(/\/$/, "");
 
-  // ---- state ----
   let amountSign = 1;
   let amountDigits = "";
   let method = "";
@@ -81,27 +73,29 @@
   let secondImage = "";
   let signature = null;
   let mission = "";
-  let lastPosition = null;   // latest geolocation fix, captured in the background
-  let geoWatchId = null;     // navigator.geolocation.watchPosition handle
+  let lastPosition = null;
+  let geoWatchId = null;
 
-  const HISTORY_KEY = "workingfund_history";   // shared across missions, for autofill
+  const HISTORY_KEY = "workingfund_history";
   const HISTORY_CAP = 100;
 
   const balanceKey = (m) => "workingfund_wave_balance_" + (m || mission);
   const outboxKey  = (m) => "workingfund_outbox_" + (m || mission);
   const recentKey  = (m) => "workingfund_recent_" + (m || mission);
 
-  // =========================================================================
-  // Mission
-  // =========================================================================
   function currentMission() {
     const saved = localStorage.getItem("workingfund_mission");
     if (MISSIONS.indexOf(saved) !== -1) return saved;
     return MISSIONS.indexOf(cfg.DEFAULT_MISSION) !== -1 ? cfg.DEFAULT_MISSION : "east";
   }
   function wireMission() {
+    const card = $("missionCard"), toggle = $("missionToggle"), row = $("missionRow");
+    function openMission() { row.classList.remove("hidden"); card.classList.add("open"); toggle.setAttribute("aria-expanded", "true"); }
+    function closeMission() { row.classList.add("hidden"); card.classList.remove("open"); toggle.setAttribute("aria-expanded", "false"); }
+    if (toggle) toggle.addEventListener("click", () =>
+      (row.classList.contains("hidden") ? openMission : closeMission)());
     document.querySelectorAll("#missionRow .seg").forEach((b) =>
-      b.addEventListener("click", () => setMission(b.dataset.mission)));
+      b.addEventListener("click", () => { setMission(b.dataset.mission); closeMission(); }));
   }
   function setMission(m) {
     if (MISSIONS.indexOf(m) === -1) m = "east";
@@ -111,14 +105,13 @@
       x.setAttribute("aria-pressed", String(x.dataset.mission === m)));
     $("waveMissionTag").textContent = "(" + titleCase(m) + ")";
     $("recentMissionTag").textContent = "(" + titleCase(m) + ")";
+    const cur = $("missionCurrent");
+    if (cur) cur.textContent = titleCase(m);
     loadWaveBalance();
     renderOutbox();
     renderRecent();
   }
 
-  // =========================================================================
-  // Account combobox — filter by code, two columns (code | account name)
-  // =========================================================================
   function accountRowHtml(code) {
     const name = ACCOUNT_CODES[code];
     const color = seriesColor(name);
@@ -192,9 +185,6 @@
     });
   }
 
-  // =========================================================================
-  // Amount
-  // =========================================================================
   function renderAmount() {
     const preview = $("amountPreview");
     const n = amountDigits ? parseInt(amountDigits, 10) : 0;
@@ -221,9 +211,6 @@
   }
   const amountValue = () => (amountDigits ? amountSign * parseInt(amountDigits, 10) : 0);
 
-  // =========================================================================
-  // Method
-  // =========================================================================
   function selectMethod(m) {
     method = m;
     document.querySelectorAll("#methodRow .seg").forEach((x) =>
@@ -237,13 +224,9 @@
       b.addEventListener("click", () => selectMethod(b.dataset.method)));
   }
 
-  // =========================================================================
-  // Presets
-  // =========================================================================
   function loadPresets() {
     const ver = localStorage.getItem("workingfund_presets_version");
     const raw = localStorage.getItem("workingfund_presets");
-    // Re-seed when missing or when the default set has been versioned up.
     if (raw == null || ver !== PRESETS_VERSION) { savePresets(DEFAULT_PRESETS); return DEFAULT_PRESETS.slice(); }
     try { return JSON.parse(raw); } catch (_) { return DEFAULT_PRESETS.slice(); }
   }
@@ -281,13 +264,12 @@
   }
   function applyPreset(p) {
     if (p.accountCode && ACCOUNT_CODES[p.accountCode]) setAccount(p.accountCode);
-    $("description").value = p.label;   // description is always the preset name
+    $("description").value = p.label;
     if (p.amount) setAmount(p.amount); else setAmount(0);
     if (p.method) selectMethod(p.method);
     toast("Applied: " + p.label, "ok");
   }
 
-  // ---- preset add / manage modal ----
   function buildPresetAccountSelect() {
     const sel = $("pAccount");
     sel.innerHTML = '<option value="">None</option>' +
@@ -311,7 +293,6 @@
   }
   function openPresetModal() {
     buildPresetAccountSelect();
-    // Pre-fill the form from whatever is currently entered, for a quick "save as preset".
     $("pName").value = "";
     $("pAccount").value = selectedAccount || "";
     $("pDesc").value = $("description").value.trim();
@@ -345,9 +326,6 @@
   }
   function hashStr(s) { let h = 0; for (let i = 0; i < s.length; i++) { h = (h << 5) - h + s.charCodeAt(i); h |= 0; } return h; }
 
-  // =========================================================================
-  // Photos
-  // =========================================================================
   function compressImage(file, maxDim, quality) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -392,9 +370,6 @@
     }));
   }
 
-  // =========================================================================
-  // Signature pad (compact integer vector strokes)
-  // =========================================================================
   function drawSignature(canvas, sig, pad) {
     const ctx = canvas.getContext("2d");
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -483,9 +458,6 @@
     });
   }
 
-  // =========================================================================
-  // Wave balance (per mission)
-  // =========================================================================
   async function loadWaveBalance() {
     const base = apiBase();
     let val = null;
@@ -498,7 +470,7 @@
   }
   function renderWaveBalance(val) {
     const el = $("waveBalance");
-    if (val == null || isNaN(val)) { el.textContent = "—"; el.classList.add("empty"); }
+    if (val == null || isNaN(val)) { el.textContent = "N/A"; el.classList.add("empty"); }
     else { el.textContent = groupDigits(val); el.classList.remove("empty"); }
   }
   function currentWave() { const t = $("waveBalance").textContent.replace(/[^\d-]/g, ""); return t ? parseInt(t, 10) : 0; }
@@ -521,9 +493,6 @@
     });
   }
 
-  // =========================================================================
-  // Recent transactions — local only (no network), per mission
-  // =========================================================================
   function loadRecent(m) { try { return JSON.parse(localStorage.getItem(recentKey(m)) || "[]"); } catch (_) { return []; } }
   function pushRecent(tx) {
     const arr = loadRecent();
@@ -531,7 +500,7 @@
       at: tx.clientCreatedAt, beneficiary: tx.beneficiary,
       accountCode: tx.accountCode, amount: tx.amount, currency: tx.currency, method: tx.method
     });
-    localStorage.setItem(recentKey(), JSON.stringify(arr.slice(0, 10))); // cap 10 -> tiny footprint
+    localStorage.setItem(recentKey(), JSON.stringify(arr.slice(0, 10)));
   }
   function fmtRecentDate(iso) {
     const d = new Date(iso); if (isNaN(d)) return "";
@@ -559,15 +528,10 @@
     });
   }
 
-  // =========================================================================
-  // Autocomplete — learn from past transactions (localStorage) and offer to
-  // fill the WHOLE form while typing. Like presets, but automatic.
-  // =========================================================================
   function loadHistory() {
     try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]"); } catch (_) { return []; }
   }
   function pushHistory(tx) {
-    // Store the field-fill payload only (no images/signature/location).
     const entry = {
       beneficiary: tx.beneficiary || "", accountCode: tx.accountCode || "",
       description: tx.description || "", amount: Math.abs(tx.amount || 0),
@@ -575,7 +539,6 @@
     };
     if (!entry.beneficiary && !entry.description) return;
     const arr = loadHistory();
-    // De-dupe on the full combination so repeats bubble up instead of piling up.
     const key = (e) => [e.beneficiary, e.accountCode, e.description, e.amount, e.sign, e.method].join("|").toLowerCase();
     const k = key(entry);
     const deduped = arr.filter((e) => key(e) !== k);
@@ -639,33 +602,40 @@
     input.addEventListener("blur", () => setTimeout(close, 120));
   }
 
-  // =========================================================================
-  // Geolocation — start positioning on load so a fix is ready by submit time
-  // =========================================================================
   function setGeoStatus(text, kind) {
     const el = $("geoStatus");
     if (!el) return;
     el.textContent = text || "";
     el.className = "geo-status" + (kind ? " " + kind : "");
   }
+  const GOOD_ACCURACY_M = 65;
+  function metersBetween(aLat, aLon, bLat, bLon) {
+    const R = 6371000, toRad = Math.PI / 180;
+    const dLat = (bLat - aLat) * toRad, dLon = (bLon - aLon) * toRad;
+    const s = Math.sin(dLat / 2) ** 2 +
+              Math.cos(aLat * toRad) * Math.cos(bLat * toRad) * Math.sin(dLon / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(s));
+  }
   function onGeoOk(pos) {
     const c = pos && pos.coords;
     if (!c) return;
-    // Keep the newest fix; prefer it when it is at least as accurate, but a
-    // fresh fix always wins so the location tracks the user as they move.
+    const acc = c.accuracy != null ? Math.round(c.accuracy) : null;
+    if (lastPosition && lastPosition.accuracy != null && acc != null && acc > lastPosition.accuracy) {
+      const moved = metersBetween(lastPosition.lat, lastPosition.lon, c.latitude, c.longitude);
+      if (moved < lastPosition.accuracy + acc) return;
+    }
     lastPosition = {
-      lat: c.latitude, lon: c.longitude,
-      accuracy: c.accuracy != null ? Math.round(c.accuracy) : null,
+      lat: c.latitude, lon: c.longitude, accuracy: acc,
       at: new Date().toISOString()
     };
-    const acc = lastPosition.accuracy != null ? ` (±${lastPosition.accuracy} m)` : "";
-    setGeoStatus("Location ready" + acc, "ok");
+    const txt = acc != null ? ` (±${acc} m)` : "";
+    if (acc != null && acc > GOOD_ACCURACY_M) setGeoStatus("Locating…" + txt);
+    else setGeoStatus("Location ready" + txt, "ok");
   }
   function onGeoErr(err) {
-    // 1 = permission denied, 2 = unavailable, 3 = timeout
     const msg = err && err.code === 1
-      ? "Location off — transaction will save without it"
-      : "Location unavailable — saving without it";
+      ? "Location off, saving without it"
+      : "Location unavailable, saving without it";
     setGeoStatus(msg, "warn");
   }
   function startGeolocation() {
@@ -673,14 +643,11 @@
     setGeoStatus("Getting location…");
     try {
       geoWatchId = navigator.geolocation.watchPosition(onGeoOk, onGeoErr, {
-        enableHighAccuracy: true, maximumAge: 30000, timeout: 27000
+        enableHighAccuracy: true, maximumAge: 0, timeout: 27000
       });
-    } catch (_) { setGeoStatus("Location unavailable — saving without it", "warn"); }
+    } catch (_) { setGeoStatus("Location unavailable, saving without it", "warn"); }
   }
 
-  // =========================================================================
-  // Submit + offline outbox (per mission)
-  // =========================================================================
   function loadOutbox(m) { try { return JSON.parse(localStorage.getItem(outboxKey(m)) || "[]"); } catch (_) { return []; } }
   function saveOutbox(arr, m) { localStorage.setItem(outboxKey(m), JSON.stringify(arr)); renderOutbox(); }
   function renderOutbox() {
@@ -736,14 +703,14 @@
         description: $("description").value.trim(), amount: amountValue(),
         currency: CURRENCY, method, receiptImage,
         secondReceiptImage: SECOND_RECEIPT[method] ? secondImage : "",
-        signature, location: lastPosition,   // captured in the background since load
+        signature, location: lastPosition,
         clientCreatedAt: new Date().toISOString(), logged: false
       };
       const btn = $("submitBtn"); btn.disabled = true; btn.textContent = "Saving...";
       try { await postTransaction(tx); toast(`Saved to cloud (${titleCase(mission)})`, "ok"); }
-      catch (_) { const ob = loadOutbox(); ob.push(tx); saveOutbox(ob); toast("Saved offline - will sync later", "ok"); }
-      pushRecent(tx); renderRecent();        // local recent list, no extra call
-      pushHistory(tx);                       // learn for autocomplete next time
+      catch (_) { const ob = loadOutbox(); ob.push(tx); saveOutbox(ob); toast("Saved offline, will sync later", "ok"); }
+      pushRecent(tx); renderRecent();
+      pushHistory(tx);
       if (method === "wave") await saveWaveBalance(currentWave() - tx.amount);
       resetForm();
       btn.disabled = false; btn.textContent = "Save transaction";
@@ -751,7 +718,6 @@
     $("syncBtn").addEventListener("click", () => syncOutbox(false));
   }
 
-  // ---- misc ----
   function escapeHtml(s) {
     return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
@@ -761,8 +727,22 @@
     if (toastTimer) clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.add("hidden"), 2600);
   }
 
-  // ---- init ----
+  // Dark mode follows the time of day: dark from 7pm to 6am, light otherwise.
+  function isNightTime() { const h = new Date().getHours(); return h >= 19 || h < 6; }
+  function applyAutoTheme() {
+    const dark = isNightTime();
+    document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute("content", dark ? "#0f1519" : "#2d3c45");
+  }
+  function wireTheme() {
+    applyAutoTheme();
+    setInterval(applyAutoTheme, 5 * 60 * 1000);
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) applyAutoTheme(); });
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
+    wireTheme();
     wireAccountCombo();
     wireAmount();
     wireMethods();
@@ -778,8 +758,8 @@
     wireAutocomplete("description", "descAcPanel");
     renderAmount();
     renderSignaturePreview();
-    setMission(currentMission());  // loads balance + outbox + recent for the mission
-    startGeolocation();            // begin positioning now; fix ready by submit
+    setMission(currentMission());
+    startGeolocation();
     if (apiBase()) syncOutbox(true);
   });
 })();
