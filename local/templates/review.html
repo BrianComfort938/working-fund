@@ -4,19 +4,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Working Fund — Review</title>
+  <title>Working Fund: Review</title>
   <link rel="stylesheet" href="/static/review.css">
 </head>
 
 <body>
-  <!-- REVIEW VIEW -->
   <main id="reviewView">
-    <!-- Left timeline banner: where the recorded time falls in the sector day -->
     <aside class="col-time">
       <div id="timeBanner" class="time-banner"></div>
     </aside>
     <section class="col-main">
-      <!-- Inline navigation (replaces the old top banner) -->
       <div class="review-nav">
         <div class="nav-group" id="navGroup">
           <button type="button" class="nav-btn" id="prevBtn" title="Previous">&#8249;</button>
@@ -30,35 +27,35 @@
       <div id="recForm" class="rec-form"></div>
     </section>
     <aside class="col-side">
-      <!-- Live location map for the current transaction (full width, on top) -->
       <div class="loc-card">
         <h3>Location</h3>
         <div id="locMap" class="loc-map"></div>
         <div id="locMeta" class="loc-meta"></div>
       </div>
 
-      <!-- Calendar and possible duplicates side by side, beneath the map -->
       <div class="side-row">
         <div id="calendar" class="calendar"></div>
         <div class="dup-card" id="similarField">
           <h3>Possible duplicates</h3>
-          <div id="similarList" class="similar-list"><div class="dup-empty">None found</div></div>
+          <div id="similarList" class="similar-list">
+            <div class="dup-empty">None found</div>
+          </div>
         </div>
       </div>
 
-      <!-- Settings box (bottom) -->
       <button type="button" class="settings-box" id="settingsBtn">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"
           stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="3"></circle>
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          <path
+            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z">
+          </path>
         </svg>
         <span>Settings</span>
       </button>
     </aside>
   </main>
 
-  <!-- HISTORY VIEW -->
   <main id="historyView" class="hidden">
     <div class="history-head">
       <h2>History</h2>
@@ -78,16 +75,19 @@
     </div>
   </main>
 
-  <!-- Settings popup: mission, fund period, history, help -->
   <div id="settingsModal" class="modal hidden">
     <div class="modal-card">
-      <div class="modal-head"><h2>Settings</h2></div>
+      <div class="modal-head">
+        <h2>Settings</h2>
+      </div>
 
       <div class="set-field">
         <label>Mission</label>
         <div class="mission-switch" id="missionSwitch">
-          <button type="button" class="mission-tab" data-mission="east">East <span class="cnt" id="cntEast">0</span></button>
-          <button type="button" class="mission-tab" data-mission="south">South <span class="cnt" id="cntSouth">0</span></button>
+          <button type="button" class="mission-tab" data-mission="east">East <span class="cnt"
+              id="cntEast">0</span></button>
+          <button type="button" class="mission-tab" data-mission="south">South <span class="cnt"
+              id="cntSouth">0</span></button>
         </div>
       </div>
 
@@ -96,18 +96,87 @@
         <input id="period" inputmode="numeric" maxlength="3" value="000" title="000-999">
       </div>
 
+      <div class="set-section set-mysql">
+        <div class="set-sec-label">MySQL ledger</div>
+        <p class="set-note">Approved transactions are mirrored into a local MySQL table.
+          Set where they go below.</p>
+        <label class="set-check"><input type="checkbox" id="myEnabled"> Mirror to MySQL</label>
+        <div class="set-grid">
+          <div class="set-cell wide">
+            <span class="set-cap">Table name</span>
+            <input id="myTable" class="set-text" placeholder="transactions_2025" autocomplete="off" spellcheck="false">
+          </div>
+          <div class="set-cell">
+            <span class="set-cap">Host</span>
+            <input id="myHost" class="set-text" placeholder="localhost" autocomplete="off" spellcheck="false">
+          </div>
+          <div class="set-cell">
+            <span class="set-cap">Port</span>
+            <input id="myPort" class="set-text" inputmode="numeric" placeholder="3306" autocomplete="off">
+          </div>
+          <div class="set-cell">
+            <span class="set-cap">Database</span>
+            <input id="myDb" class="set-text" placeholder="working_fund_db" autocomplete="off" spellcheck="false">
+          </div>
+          <div class="set-cell">
+            <span class="set-cap">User</span>
+            <input id="myUser" class="set-text" placeholder="root" autocomplete="off" spellcheck="false">
+          </div>
+          <div class="set-cell wide">
+            <span class="set-cap">Password</span>
+            <input id="myPassword" class="set-text" type="password" placeholder="(unchanged)"
+              autocomplete="new-password">
+          </div>
+        </div>
+        <div class="set-actions">
+          <button type="button" class="btn" id="myTest">Test connection</button>
+          <span class="spacer"></span>
+          <button type="button" class="btn primary" id="mySave">Save</button>
+        </div>
+        <p class="set-status" id="myStatus"></p>
+      </div>
+
       <div class="set-field">
         <label>Records</label>
         <button type="button" class="btn" id="historyBtn">History</button>
       </div>
 
       <div class="set-field">
-        <label>Shortcuts</label>
-        <ul class="shortcuts-list">
-          <li><kbd>Enter</kbd>Write and Print</li>
-          <li><kbd>&#8592;</kbd> <kbd>&#8594;</kbd> previous / next</li>
-          <li><kbd>[</kbd> <kbd>]</kbd> calendar month</li>
+        <label>Keyboard shortcuts</label>
+        <p class="set-note">Press <kbd>Alt</kbd> to reveal a key hint over every button. Press <kbd>Alt</kbd> or
+          <kbd>Esc</kbd> to hide the hints.</p>
+        <ul class="kt-legend">
+          <li><kbd>B</kbd> Beneficiary</li>
+          <li><kbd>M</kbd> Mission</li>
+          <li><kbd>E</kbd> Method</li>
+          <li><kbd>A</kbd> Account</li>
+          <li><kbd>D</kbd> Description</li>
+          <li><kbd>S</kbd> Amount sign +/&minus;</li>
+          <li><kbd>N</kbd> Amount</li>
+          <li><kbd>R</kbd> <kbd>T</kbd> Receipt print toggles</li>
+          <li><kbd>P</kbd> Approve &amp; print</li>
+          <li><kbd>K</kbd> Skip</li>
+          <li><kbd>X</kbd> Delete</li>
+          <li><kbd>G</kbd> Settings</li>
+          <li><kbd>&#8592;</kbd> <kbd>&#8594;</kbd> Previous / next</li>
+          <li><kbd>[</kbd> <kbd>]</kbd> Calendar month</li>
         </ul>
+        <p class="set-note">Always on: <kbd>Enter</kbd> approve &amp; print &middot;
+          <kbd>Esc</kbd> close.
+        </p>
+      </div>
+
+      <div class="set-field">
+        <label>Local storage</label>
+        <p class="set-note">This review portal stores data in this browser in localStorage:</p>
+        <ul class="set-list">
+          <li>The mission you last reviewed.</li>
+          <li>Recently approved and deleted transactions, so History can reverse them
+            (up to 50 of each).</li>
+        </ul>
+        <p class="set-note">Approved transactions are written to the local working fund database and a CSV backup.
+          CSV Backups are automatically printed after 100 lines and then cleared to save space.
+          Receipt images are not kept.</p>
       </div>
 
       <div class="modal-actions">
@@ -117,10 +186,11 @@
     </div>
   </div>
 
-  <!-- Delete confirmation -->
   <div id="confirmModal" class="modal hidden">
     <div class="modal-card">
-      <div class="modal-head"><h2>Delete transaction</h2></div>
+      <div class="modal-head">
+        <h2>Delete transaction</h2>
+      </div>
       <p class="hint" id="confirmMsg"></p>
       <p class="hint warn">This permanently removes it from the cloud, including its
         receipts and signature. You can reverse it from History while this app stays open.</p>
@@ -132,6 +202,7 @@
     </div>
   </div>
 
+  <div id="keytipLayer" class="keytip-layer hidden"></div>
   <div id="toast" class="toast hidden"></div>
   <script src="/static/review.js"></script>
 </body>

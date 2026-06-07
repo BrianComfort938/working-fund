@@ -1,7 +1,6 @@
 (function () {
   "use strict";
 
-  // ---- account codes + series colors (KEEP EXACT codes) ----
   const ACCOUNT_CODES = {
     "00": "400-5102 Travel In-field", "01": "400-5700 Furnishings YM",
     "02": "400-5930 Food and Personal Items", "03": "400-5868 Utilities YM",
@@ -21,7 +20,7 @@
     "41": "600-5700 Vehicle Equipment", "42": "600-5772 Vehicle Maintenance and repairs",
     "50": "900-5102 Travel, Baggage, Visa and Other", "51": "900-5949 Missionary Medical",
   };
-  const ACCOUNT_ORDER = Object.keys(ACCOUNT_CODES).sort(); // by code: 00, 01, ... 51
+  const ACCOUNT_ORDER = Object.keys(ACCOUNT_CODES).sort();
   const SERIES_META = {
     "400": { label: "Field", color: "#2e7d32" },
     "000": { label: "Admin", color: "#00618a" },
@@ -40,7 +39,6 @@
   const METHOD_LABELS = { cash: "Cash", wave: "Wave", orange: "Orange Money" };
   const methodLabel = (m) => METHOD_LABELS[m] || m || "";
 
-  // Browser-local history (this computer only), as the user requested.
   const HKEY_COMMITTED = "workingfund_review_committed";
   const HKEY_DELETED = "workingfund_review_deleted";
   const HIST_CAP = 50;
@@ -70,8 +68,10 @@
     return String(s == null ? "" : s)
       .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
+  // Toggle the "darker, empty" look on a field whose value is blank, so every
+  // field stays present in the form even when there is nothing to show.
+  function markEmpty(el, empty) { if (el) el.classList.toggle("is-empty", !!empty); }
 
-  // ---- load / state ----
   async function load() {
     const s = await api("/api/state");
     state.period = s.period;
@@ -80,9 +80,6 @@
     $("period").value = s.period;
     const saved = localStorage.getItem("workingfund_mission");
     let wanted = MISSIONS.indexOf(saved) !== -1 ? saved : s.mission;
-    // If the chosen mission has no transactions but the other one does, start on
-    // the mission that actually has data — otherwise the reviewer sees an empty
-    // "nothing to review" screen while transactions sit in the other mission.
     if (!state.counts[wanted] && state.counts[wanted === "east" ? "south" : "east"]) {
       wanted = wanted === "east" ? "south" : "east";
     }
@@ -111,7 +108,6 @@
     toast("Mission: " + titleCase(state.mission), "ok");
   }
 
-  // ---- top-level render ----
   function renderAll() {
     $("cntEast").textContent = state.counts.east || 0;
     $("cntSouth").textContent = state.counts.south || 0;
@@ -119,7 +115,6 @@
       b.setAttribute("aria-pressed", String(b.dataset.mission === state.mission)));
     $("progress").textContent = state.queue.length ? `${state.idx + 1} / ${state.queue.length}` : "0 / 0";
 
-    // Inline indicators that replaced the old banner
     const mb = $("missionBadge");
     if (mb) { mb.textContent = titleCase(state.mission); mb.className = "mission-pill " + state.mission; }
     const pb = $("periodBadge");
@@ -133,15 +128,16 @@
     else renderHistory();
   }
 
-  // ---- left timeline banner: all of a day's transactions on a full 24h rail ----
-  const DAY_MIN = 24 * 60;                 // full day span
-  const TL_MARKS = [                        // notable times (labels sit beside the line)
+  const DAY_MIN = 24 * 60;
+  const TL_MARKS = [
     { min: 6 * 60 + 30, label: "6:30" },
     { min: 9 * 60, label: "9:00" },
     { min: 12 * 60, label: "12:00" },
     { min: 18 * 60 + 30, label: "18:30" },
     { min: 22 * 60 + 30, label: "22:30" },
   ];
+  const CLUSTER_GAP_PX = 30;
+  let tlDrag = null;
   const txMinutes = (t) => {
     const d = t && t.recordedAt ? new Date(t.recordedAt) : null;
     if (!d || isNaN(d)) return null;
@@ -153,7 +149,6 @@
     if (!w.length) return "";
     return w.length > words ? w.slice(0, words).join(" ") + "…" : w.join(" ");
   }
-  // Sentence case: first letter capital, the rest lowercased.
   function sentenceCase(text) {
     const s = String(text || "").trim();
     if (!s) return "";
@@ -165,51 +160,145 @@
     if (!el) return;
     const t = cur();
 
-    // Which day? The current transaction's day, else today.
     const refD = t && t.recordedAt && !isNaN(new Date(t.recordedAt)) ? new Date(t.recordedAt) : new Date();
     const dayKey = refD.toDateString();
 
-    // All transactions in the queue recorded that day, with a valid time, sorted.
     const dayTx = state.queue
       .map((x, i) => ({ x, i, mins: txMinutes(x) }))
       .filter((o) => o.mins != null && new Date(o.x.recordedAt).toDateString() === dayKey)
       .sort((a, b) => a.mins - b.mins);
 
-    // Recorded date/time of the current transaction (moved here from the form).
     const recordedLabel = t && t.recordedAt ? fmtWhen(t.recordedAt) : "No date";
     const header = `<div class="tl-head"><span class="tl-recorded">${esc(recordedLabel)}</span>` +
       `<span class="tl-sub">${dayTx.length} transaction${dayTx.length === 1 ? "" : "s"}</span></div>`;
 
-    // Notable-time marks: tick on the line + label to the right of it.
     const marks = TL_MARKS.map((m) => {
       const pct = (m.min / DAY_MIN) * 100;
       return `<div class="tl-mark" style="top:${pct}%"><span class="tl-tick"></span>` +
         `<span class="tl-label">${m.label}</span></div>`;
     }).join("");
 
-    // One marker per transaction: dot on the line + info box to the LEFT.
-    const dots = dayTx.map((o) => {
-      const pct = (o.mins / DAY_MIN) * 100;
-      const isCur = o.i === state.idx;
-      const name = sentenceCase(clip(o.x.beneficiary, 4)) || "(no name)";
-      const desc = sentenceCase(clip(o.x.description, 6));
-      return `<div class="tl-tx${isCur ? " current" : ""}" style="top:${pct}%" data-idx="${o.i}" title="${esc(hhmm(o.mins))} — ${esc(o.x.beneficiary || "")}">` +
-        `<span class="tl-box"><span class="tl-box-name">${esc(name)}</span>` +
-        (desc ? `<span class="tl-box-desc">${esc(desc)}</span>` : "") + `</span>` +
-        `<span class="tl-txdot"></span></div>`;
-    }).join("");
+    el.innerHTML = header + `<div class="tl-rail" id="tlRail"><div class="tl-line"></div>${marks}</div>`;
+    const rail = $("tlRail");
+    const railH = rail.clientHeight || 360;
 
-    el.innerHTML = header + `<div class="tl-rail"><div class="tl-line"></div>${marks}${dots}</div>`;
+    const clusters = [];
+    dayTx.forEach((o) => {
+      const px = (o.mins / DAY_MIN) * railH;
+      const last = clusters[clusters.length - 1];
+      if (last && px - last.lastPx < CLUSTER_GAP_PX) { last.items.push(o); last.lastPx = px; }
+      else clusters.push({ items: [o], lastPx: px });
+    });
 
-    // Click a box to jump to that transaction.
-    el.querySelectorAll(".tl-tx").forEach((node) =>
+    rail.insertAdjacentHTML("beforeend", clusters.map((c, ci) =>
+      c.items.length === 1 ? singleMarkerHtml(c.items[0]) : clusterMarkerHtml(c, ci)).join(""));
+
+    wireTimeline(rail, clusters);
+  }
+
+  function singleMarkerHtml(o) {
+    const pct = (o.mins / DAY_MIN) * 100;
+    const isCur = o.i === state.idx;
+    const name = sentenceCase(clip(o.x.beneficiary, 4)) || "(no name)";
+    const desc = sentenceCase(clip(o.x.description, 6));
+    return `<div class="tl-tx${isCur ? " current" : ""}" style="top:${pct}%" data-idx="${o.i}" title="${esc(hhmm(o.mins))}, ${esc(o.x.beneficiary || "")}">` +
+      `<span class="tl-box"><span class="tl-box-name">${esc(name)}</span>` +
+      (desc ? `<span class="tl-box-desc">${esc(desc)}</span>` : "") + `</span>` +
+      `<span class="tl-txdot"></span></div>`;
+  }
+
+  function clusterPos(items) {
+    const p = items.findIndex((o) => o.i === state.idx);
+    return p >= 0 ? p : 0;
+  }
+
+  function clusterMarkerHtml(c, ci) {
+    const items = c.items;
+    const meanMin = items.reduce((s, o) => s + o.mins, 0) / items.length;
+    const pct = (meanMin / DAY_MIN) * 100;
+    const active = items.some((o) => o.i === state.idx);
+    const pos = clusterPos(items);
+    const o = items[pos];
+    const name = sentenceCase(clip(o.x.beneficiary, 4)) || "(no name)";
+    const desc = sentenceCase(clip(o.x.description, 6));
+    const t0 = hhmm(items[0].mins), t1 = hhmm(items[items.length - 1].mins);
+    const range = t0 === t1 ? t0 : t0 + " to " + t1;
+    return `<div class="tl-cluster${active ? " current" : ""}" style="top:${pct}%" data-cluster="${ci}" ` +
+      `title="${esc(range)}, ${items.length} transactions at about the same time">` +
+      `<span class="tl-box">` +
+        `<span class="tl-box-head"><span class="tl-box-time">${esc(hhmm(o.mins))}</span>` +
+        `<span class="tl-count">${pos + 1} / ${items.length}</span></span>` +
+        `<span class="tl-box-name">${esc(name)}</span>` +
+        (desc ? `<span class="tl-box-desc">${esc(desc)}</span>` : "") +
+      `</span>` +
+      `<span class="tl-txdot cluster"><span class="tl-badge">${items.length}</span></span></div>`;
+  }
+
+  function updateClusterNode(node, items, pos) {
+    const o = items[pos];
+    node.classList.add("current");
+    node.querySelector(".tl-box-time").textContent = hhmm(o.mins);
+    node.querySelector(".tl-count").textContent = (pos + 1) + " / " + items.length;
+    node.querySelector(".tl-box-name").textContent = sentenceCase(clip(o.x.beneficiary, 4)) || "(no name)";
+    const d = node.querySelector(".tl-box-desc");
+    if (d) d.textContent = sentenceCase(clip(o.x.description, 6));
+  }
+
+  function cascadeLight(i) {
+    state.idx = i;
+    $("progress").textContent = state.queue.length ? `${state.idx + 1} / ${state.queue.length}` : "0 / 0";
+    const t = cur();
+    const rl = document.querySelector("#timeBanner .tl-recorded");
+    if (rl) rl.textContent = t && t.recordedAt ? fmtWhen(t.recordedAt) : "No date";
+    renderReview();
+    renderLocation();
+  }
+
+  function wireTimeline(rail, clusters) {
+    rail.querySelectorAll(".tl-tx").forEach((node) =>
       node.addEventListener("click", () => {
         const i = parseInt(node.dataset.idx, 10);
         if (!isNaN(i)) { state.idx = i; renderAll(); }
       }));
+
+    rail.querySelectorAll(".tl-cluster").forEach((node) => {
+      const items = clusters[parseInt(node.dataset.cluster, 10)].items;
+      const n = items.length;
+      const step = (delta) => {
+        const here = items.some((o) => o.i === state.idx);
+        const np = here ? (((clusterPos(items) + delta) % n) + n) % n : 0;
+        state.idx = items[np].i;
+        renderAll();
+      };
+
+      node.addEventListener("wheel", (e) => { e.preventDefault(); step(e.deltaY > 0 ? 1 : -1); }, { passive: false });
+
+      node.addEventListener("pointerdown", (e) => {
+        tlDrag = { node, items, startY: e.clientY, startPos: clusterPos(items), lastP: clusterPos(items), moved: false };
+        try { node.setPointerCapture(e.pointerId); } catch (_) {}
+        e.preventDefault();
+      });
+      node.addEventListener("pointermove", (e) => {
+        if (!tlDrag || tlDrag.node !== node) return;
+        const dy = e.clientY - tlDrag.startY;
+        if (Math.abs(dy) > 3) tlDrag.moved = true;
+        let p = tlDrag.startPos + Math.round(dy / 22);
+        p = Math.max(0, Math.min(n - 1, p));
+        if (p !== tlDrag.lastP) { tlDrag.lastP = p; cascadeLight(items[p].i); updateClusterNode(node, items, p); }
+      });
+      const endDrag = (e) => {
+        if (!tlDrag || tlDrag.node !== node) return;
+        const moved = tlDrag.moved;
+        tlDrag = null;
+        try { node.releasePointerCapture(e.pointerId); } catch (_) {}
+        if (moved) renderAll();
+        else step(1);
+      };
+      node.addEventListener("pointerup", endDrag);
+      node.addEventListener("pointercancel", endDrag);
+    });
   }
 
-  // ---- live location map (OpenStreetMap embed) for the current transaction ----
   function renderLocation() {
     const mapEl = $("locMap"), metaEl = $("locMeta");
     if (!mapEl) return;
@@ -220,13 +309,10 @@
       metaEl.textContent = "";
       return;
     }
-    // A small bounding box around the point makes the pin clearly visible.
     const d = 0.004;
     const bbox = [loc.lon - d, loc.lat - d, loc.lon + d, loc.lat + d].join("%2C");
     const marker = `${loc.lat}%2C${loc.lon}`;
     const src = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${marker}`;
-    // Only rebuild the iframe when the target changed (avoids reload flicker on
-    // unrelated re-renders such as editing a field).
     if (mapEl.dataset.marker !== marker) {
       mapEl.dataset.marker = marker;
       mapEl.innerHTML = `<iframe title="Transaction location" src="${src}" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>`;
@@ -236,7 +322,6 @@
     metaEl.innerHTML = `<a href="https://www.google.com/maps?q=${loc.lat},${loc.lon}" target="_blank" rel="noopener">${esc(ll)}</a>${acc}`;
   }
 
-  // ---- account select (grouped: code  name) ----
   function buildAccountOptions(selected) {
     const order = [], groups = {};
     ACCOUNT_ORDER.forEach((code) => {
@@ -248,7 +333,7 @@
       const meta = SERIES_META[k] || { label: k };
       const opts = groups[k].map((code) =>
         `<option value="${code}" ${code === selected ? "selected" : ""}>${code}  ${esc(ACCOUNT_CODES[code])}</option>`).join("");
-      return `<optgroup label="${k} - ${meta.label}">${opts}</optgroup>`;
+      return `<optgroup label="${k}: ${meta.label}">${opts}</optgroup>`;
     }).join("");
   }
 
@@ -265,7 +350,21 @@
     return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
   }
 
-  // ---- REVIEW view: editable-by-default form ----
+  function receiptFigure(t, which, caption) {
+    const off = !!(t.excluded && t.excluded[which]);
+    const src = `/api/receipt/${t.id}/${which}`;
+    return `<figure class="receipt-fig${off ? " excluded" : ""}" data-which="${which}">` +
+      `<figcaption>${esc(caption)}</figcaption>` +
+      `<div class="receipt-img-wrap" title="Hover to enlarge">` +
+        `<img class="receipt-thumb" src="${src}" alt="${esc(caption)}">` +
+        `<img class="receipt-zoom" src="${src}" alt="" aria-hidden="true">` +
+        `<span class="excluded-tag">Won't print</span>` +
+      `</div>` +
+      `<button type="button" class="receipt-toggle" data-which="${which}">` +
+        `${off ? "Add back to print" : "Remove from print"}</button>` +
+      `</figure>`;
+  }
+
   function renderReview() {
     const wrap = $("recForm");
     const t = cur();
@@ -278,16 +377,14 @@
     const color = seriesColor(t.accountName);
     const neg = t.amount < 0;
     let media = "";
-    if (t.hasReceipt) media += `<figure><figcaption>Receipt</figcaption><img src="/api/receipt/${t.id}/main"></figure>`;
+    if (t.hasReceipt) media += receiptFigure(t, "main", "Receipt");
     if (t.hasSecondReceipt) {
-      const lbl = t.method === "orange" ? "Orange Money receipt" : "Wave receipt";
-      media += `<figure><figcaption>${lbl}</figcaption><img src="/api/receipt/${t.id}/second"></figure>`;
+      media += receiptFigure(t, "second", t.method === "orange" ? "Orange Money receipt" : "Wave receipt");
     }
-    if (t.hasSignature) media += `<figure><figcaption>Signature</figcaption><canvas class="sig-box" id="sigCv" width="230" height="86"></canvas></figure>`;
-    if (!media) media = `<span class="none">No receipts or signature attached</span>`;
+    if (t.hasSignature) media += `<figure class="receipt-fig sig-fig"><figcaption>Signature</figcaption><canvas class="sig-box" id="sigCv" width="230" height="86"></canvas></figure>`;
+    const hasMedia = !!media;
+    if (!media) media = `<div class="receipts-empty">No receipts or signature attached</div>`;
 
-    // Normalize text entries to sentence case (first letter capital) for display
-    // and for the saved record.
     t.beneficiary = sentenceCase(t.beneficiary);
     t.description = sentenceCase(t.description);
 
@@ -322,19 +419,18 @@
       </div>
       <div class="rec-field">
         <label>Attachments</label>
-        <div class="receipts">${media}</div>
+        <div class="receipts${hasMedia ? "" : " is-empty"}">${media}</div>
       </div>
       <div class="rec-actions">
-        <button type="button" class="btn approve" id="actApprove">Approve &amp; print <kbd>Enter</kbd></button>
+        <button type="button" class="btn approve" id="actApprove">Approve &amp; print</button>
         <button type="button" class="btn skip" id="actSkip">Skip</button>
         <button type="button" class="btn delete" id="actDelete">Delete</button>
       </div>`;
 
-    // live-bind edits into the in-memory transaction
-    $("f_ben").addEventListener("input", (e) => { t.beneficiary = e.target.value; });
+    $("f_ben").addEventListener("input", (e) => { t.beneficiary = e.target.value; markEmpty(e.target, !e.target.value.trim()); });
     $("f_mission").addEventListener("change", (e) => { t.mission = e.target.value; });
     $("f_method").addEventListener("change", (e) => { t.method = e.target.value; });
-    $("f_desc").addEventListener("input", (e) => { t.description = e.target.value; });
+    $("f_desc").addEventListener("input", (e) => { t.description = e.target.value; markEmpty(e.target, !e.target.value.trim()); });
     $("f_acc").addEventListener("change", (e) => {
       t.accountCode = e.target.value; t.accountName = ACCOUNT_CODES[t.accountCode] || "";
       $("f_acctName").textContent = t.accountName;
@@ -346,6 +442,7 @@
       amt.value = digits ? groupDigits(digits) : "";
       const mag = parseInt(digits, 10) || 0;
       t.amount = (t.amount < 0 ? -1 : 1) * mag;
+      markEmpty(amt, !amt.value.trim());
     });
     $("f_sign").addEventListener("click", () => {
       t.amount = -t.amount;
@@ -353,16 +450,31 @@
       $("f_sign").classList.toggle("neg", isNeg);
       $("f_sign").textContent = isNeg ? "−" : "+";
     });
+    markEmpty($("f_ben"), !String(t.beneficiary || "").trim());
+    markEmpty($("f_desc"), !String(t.description || "").trim());
+    markEmpty($("f_amt"), !$("f_amt").value.trim());
     $("actApprove").addEventListener("click", approve);
     $("actSkip").addEventListener("click", skip);
     $("actDelete").addEventListener("click", askDelete);
+
+    wrap.querySelectorAll(".receipt-toggle").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const which = btn.dataset.which;
+        t.excluded = t.excluded || {};
+        t.excluded[which] = !t.excluded[which];
+        const off = t.excluded[which];
+        btn.textContent = off ? "Add back to print" : "Remove from print";
+        const fig = btn.closest(".receipt-fig");
+        if (fig) fig.classList.toggle("excluded", off);
+        toast(off ? "Removed from printed record" : "Added back to printed record");
+      });
+    });
 
     if (t.hasSignature && t.signature) drawSignature($("sigCv"), t.signature, 6);
 
     loadSimilar(t);
   }
 
-  // ---- similar past entries (local DB + CSV duplicate check) ----
   async function loadSimilar(t) {
     const field = $("similarField"), list = $("similarList");
     if (!field || !list || !t) return;
@@ -370,10 +482,7 @@
     let matches = [];
     try { matches = (await api(`/api/similar/${t.id}`)).matches || []; }
     catch (_) { matches = []; }
-    // The reviewer may have navigated away while the request was in flight.
     if (!cur() || cur().id !== forId) return;
-    // The card sits beside the calendar and stays in place; show a placeholder
-    // (rather than hiding it) when there are no matches.
     if (!matches.length) { list.innerHTML = `<div class="dup-empty">None found</div>`; return; }
     list.innerHTML = matches.map((m) => {
       const neg = m.amount < 0;
@@ -402,7 +511,6 @@
     });
   }
 
-  // ---- actions ----
   function snapshot(t) {
     return {
       id: t.id, mission: t.mission, beneficiary: t.beneficiary, accountCode: t.accountCode,
@@ -422,15 +530,11 @@
   async function approve() {
     const t = cur();
     if (!t) return;
+    const excludeReceipts = t.excluded ? Object.keys(t.excluded).filter((k) => t.excluded[k]) : [];
     try {
-      const res = await api(`/api/approve/${t.id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(editPayload(t)) });
-      // The server prints silently (no pop-up) when it can. It returns
-      // printed:false only when this machine can't print silently, in which
-      // case we fall back to opening the print tab so nothing is lost.
+      const res = await api(`/api/approve/${t.id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(Object.assign({}, editPayload(t), { excludeReceipts })) });
       if (!res.printed) window.open(`/print/${t.id}`, "_blank");
-      // res.rollover is cleared by the server once the backup batch prints
-      // silently; if it's still set, that machine needs the tab fallback.
-      if (res.rollover) { toast("CSV hit 100 lines - printing backup sheet", "ok"); window.open(`/print/csv-batch/${res.rollover}`, "_blank"); }
+      if (res.rollover) { toast("CSV hit 100 lines, printing backup sheet", "ok"); window.open(`/print/csv-batch/${res.rollover}`, "_blank"); }
       else toast(res.printed ? "Approved & printed" : "Approved & printing", "ok");
       pushHist(HKEY_COMMITTED, snapshot(t));
       removeCurrent(true);
@@ -440,7 +544,6 @@
   function skip() {
     const t = cur();
     if (!t) return;
-    // Stays on the cloud; just hidden for this session.
     removeCurrent(true);
     toast("Skipped (stays on cloud)", "ok");
   }
@@ -479,7 +582,6 @@
     renderAll();
   }
 
-  // ---- HISTORY view ----
   function renderHistory() {
     renderHistList(HKEY_COMMITTED, "committedList", "committed");
     renderHistList(HKEY_DELETED, "deletedList", "deleted");
@@ -513,11 +615,10 @@
       localStorage.setItem(key, JSON.stringify(items));
       await refreshState();
       renderAll();
-      toast(status === "committed" ? "Reversed - returned to review, local record undone" : "Reversed - returned to review", "ok");
+      toast(status === "committed" ? "Reversed. Returned to review, local record undone" : "Reversed. Returned to review", "ok");
     } catch (e) { toast("Reverse failed", "err"); }
   }
 
-  // ---- calendar (marks days with transactions, the current tx day, and today) ----
   function renderCalendar() {
     const el = $("calendar");
     const t = cur();
@@ -571,7 +672,6 @@
     renderCalendar();
   }
 
-  // ---- period ----
   async function savePeriod() {
     try {
       const res = await api("/api/period", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ period: $("period").value }) });
@@ -581,18 +681,154 @@
     } catch (e) { toast("Invalid period (000-999)", "err"); $("period").value = state.period; }
   }
 
-  // ---- views ----
   function showHistory() { state.view = "history"; renderAll(); }
   function showReview() { state.view = "review"; renderAll(); }
 
-  // ---- settings popup ----
-  function openSettings() { $("settingsModal").classList.remove("hidden"); }
+  function openSettings() { $("settingsModal").classList.remove("hidden"); loadSettings(); }
   function closeSettings() { $("settingsModal").classList.add("hidden"); }
 
-  // ---- keyboard: Enter approves; arrows navigate; [ ] calendar. No E, no M. ----
+  function setMyStatus(msg, kind) {
+    const el = $("myStatus");
+    el.textContent = msg || "";
+    el.className = "set-status" + (kind ? " " + kind : "");
+  }
+  function mysqlPayload() {
+    return {
+      MYSQL_ENABLED: $("myEnabled").checked,
+      MYSQL_HOST: $("myHost").value.trim(),
+      MYSQL_PORT: $("myPort").value.trim(),
+      MYSQL_DB: $("myDb").value.trim(),
+      MYSQL_USER: $("myUser").value.trim(),
+      MYSQL_TABLE: $("myTable").value.trim(),
+      MYSQL_PASSWORD: $("myPassword").value, // blank means "leave unchanged"
+    };
+  }
+  function applyMysql(m) {
+    $("myEnabled").checked = !!m.MYSQL_ENABLED;
+    $("myHost").value = m.MYSQL_HOST || "";
+    $("myPort").value = m.MYSQL_PORT || "";
+    $("myDb").value = m.MYSQL_DB || "";
+    $("myUser").value = m.MYSQL_USER || "";
+    $("myTable").value = m.MYSQL_TABLE || "";
+    $("myPassword").value = "";
+    $("myPassword").placeholder = m.passwordSet ? "•••••• unchanged" : "(none set)";
+  }
+  async function loadSettings() {
+    try {
+      const s = await api("/api/settings");
+      applyMysql(s.mysql || {});
+      if (s.mysqlDriver === false) setMyStatus("pymysql isn't installed on this computer, so the MySQL mirror is off. Run: pip install -r requirements.txt", "err");
+      else setMyStatus("");
+    } catch (_) { setMyStatus("Could not load settings.", "err"); }
+  }
+  async function saveMysql() {
+    try {
+      const res = await api("/api/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mysql: mysqlPayload() }) });
+      applyMysql(res.mysql || {});
+      setMyStatus("Saved.", "ok");
+      toast("MySQL settings saved", "ok");
+    } catch (e) {
+      setMyStatus("Could not save. Table name may use only letters, numbers, and underscores.", "err");
+      toast("Save failed", "err");
+    }
+  }
+  async function testMysql() {
+    setMyStatus("Testing connection…", "");
+    try {
+      const res = await api("/api/settings/test-mysql", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mysql: mysqlPayload() }) });
+      setMyStatus(res.message || (res.ok ? "Connected." : "Could not connect."), res.ok ? "ok" : "err");
+    } catch (e) { setMyStatus("Test failed (server error).", "err"); }
+  }
+
+  // Excel-style key tips. Press Alt to paint a key hint over every control in the
+  // review view; press the shown key to use that control. Each entry resolves its
+  // element live, because the form is re-rendered for every transaction.
+  const KEYTIPS = [
+    { code: "b", label: "B", el: () => $("f_ben") },
+    { code: "m", label: "M", el: () => $("f_mission") },
+    { code: "e", label: "E", el: () => $("f_method") },
+    { code: "a", label: "A", el: () => $("f_acc") },
+    { code: "d", label: "D", el: () => $("f_desc") },
+    { code: "s", label: "S", el: () => $("f_sign") },
+    { code: "n", label: "N", el: () => $("f_amt") },
+    { code: "r", label: "R", el: () => document.querySelectorAll(".receipt-toggle")[0] },
+    { code: "t", label: "T", el: () => document.querySelectorAll(".receipt-toggle")[1] },
+    { code: "p", label: "P", el: () => $("actApprove") },
+    { code: "k", label: "K", el: () => $("actSkip") },
+    { code: "x", label: "X", el: () => $("actDelete") },
+    { code: "arrowleft", label: "←", el: () => $("prevBtn") },
+    { code: "arrowright", label: "→", el: () => $("nextBtn") },
+    { code: "[", label: "[", el: () => $("cal_prev") },
+    { code: "]", label: "]", el: () => $("cal_next") },
+    { code: "g", label: "G", el: () => $("settingsBtn") },
+  ];
+  let keyTipsOpen = false;
+
+  const normKey = (e) => String(e.key || "").toLowerCase();
+  const elVisible = (el) => !!(el && el.offsetParent !== null && el.getClientRects().length);
+  function canUseKeyTips() {
+    return state.view === "review" &&
+      $("settingsModal").classList.contains("hidden") &&
+      $("confirmModal").classList.contains("hidden");
+  }
+  function triggerKeytip(k) {
+    const el = k.el();
+    if (!el) return;
+    if (/^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName)) {
+      el.focus();
+      if (el.tagName !== "SELECT" && el.select) { try { el.select(); } catch (_) {} }
+    } else {
+      el.click();
+    }
+  }
+  function renderKeytips() {
+    const layer = $("keytipLayer");
+    if (!layer) return;
+    layer.innerHTML = "";
+    layer.classList.remove("hidden");
+    KEYTIPS.forEach((k) => {
+      const el = k.el();
+      if (!elVisible(el)) return;
+      const r = el.getBoundingClientRect();
+      const b = document.createElement("span");
+      b.className = "keytip";
+      b.textContent = k.label;
+      b.style.left = (r.left + r.width / 2) + "px";
+      b.style.top = (r.top + r.height / 2) + "px";
+      layer.appendChild(b);
+    });
+  }
+  function onDocClickClose() { closeKeyTips(); }
+  function openKeyTips() {
+    if (keyTipsOpen) return;
+    keyTipsOpen = true;
+    renderKeytips();
+    window.addEventListener("resize", renderKeytips);
+    window.addEventListener("scroll", renderKeytips, true);
+    setTimeout(() => document.addEventListener("click", onDocClickClose, true), 0);
+  }
+  function closeKeyTips() {
+    if (!keyTipsOpen) return;
+    keyTipsOpen = false;
+    const layer = $("keytipLayer");
+    if (layer) { layer.innerHTML = ""; layer.classList.add("hidden"); }
+    window.removeEventListener("resize", renderKeytips);
+    window.removeEventListener("scroll", renderKeytips, true);
+    document.removeEventListener("click", onDocClickClose, true);
+  }
+  function handleKeytipKey(e) {
+    if (e.key === "Alt") { e.preventDefault(); if (!e.repeat) closeKeyTips(); return; }
+    if (e.key === "Shift" || e.key === "Control" || e.key === "Meta" || e.key === "CapsLock") return;
+    e.preventDefault();
+    if (e.key === "Escape") { closeKeyTips(); return; }
+    const hit = KEYTIPS.find((k) => k.code === normKey(e) && elVisible(k.el()));
+    closeKeyTips();
+    if (hit) triggerKeytip(hit);
+  }
+
   function onKey(e) {
-    // Settings popup: Escape closes it, and it otherwise swallows shortcuts so
-    // typing the fund period never triggers navigation/approve.
+    if (keyTipsOpen) { handleKeytipKey(e); return; }
+    if (e.key === "Alt" && !e.repeat && canUseKeyTips()) { e.preventDefault(); openKeyTips(); return; }
     if (!$("settingsModal").classList.contains("hidden")) {
       if (e.key === "Escape") closeSettings();
       return;
@@ -606,7 +842,7 @@
     const tag = e.target.tagName;
     const inField = /^(INPUT|TEXTAREA|SELECT)$/.test(tag);
     if (e.key === "Enter") {
-      if (tag === "TEXTAREA") return;       // newline in description
+      if (tag === "TEXTAREA") return;
       e.preventDefault(); approve(); return;
     }
     if (inField) { if (e.key === "Escape") e.target.blur(); return; }
@@ -618,7 +854,6 @@
     }
   }
 
-  // ---- init ----
   document.addEventListener("DOMContentLoaded", () => {
     $("period").addEventListener("change", savePeriod);
     $("period").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); savePeriod(); e.target.blur(); } });
@@ -627,13 +862,18 @@
     $("nextBtn").addEventListener("click", () => move(1));
     $("historyBtn").addEventListener("click", () => { closeSettings(); (state.view === "review" ? showHistory() : showReview()); });
     $("backToReview").addEventListener("click", showReview);
-    // Settings popup (mission, fund period, history, help)
     $("settingsBtn").addEventListener("click", openSettings);
     $("closeSettings").addEventListener("click", closeSettings);
+    $("mySave").addEventListener("click", saveMysql);
+    $("myTest").addEventListener("click", testMysql);
+    ["myHost", "myPort", "myDb", "myUser", "myTable", "myPassword"].forEach((id) =>
+      $(id).addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); saveMysql(); } }));
     $("settingsModal").addEventListener("click", (e) => { if (e.target.id === "settingsModal") closeSettings(); });
     $("confirmCancel").addEventListener("click", () => { $("confirmModal").classList.add("hidden"); pendingDelete = null; });
     $("confirmOk").addEventListener("click", doDelete);
     document.addEventListener("keydown", onKey);
+    // Swallow the lone-Alt keyup so the browser does not pull focus to its menu bar.
+    document.addEventListener("keyup", (e) => { if (e.key === "Alt" && state.view === "review") e.preventDefault(); });
     load().catch(() => toast("Could not load transactions", "err"));
   });
 })();

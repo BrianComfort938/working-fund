@@ -2,93 +2,105 @@
 <html>
 
 <head>
-    <title>CSV Backup Batch {{ batch_id }}</title>
+    <meta charset="utf-8">
+    <title>CSV Backup {{ batch_id }}</title>
     <style>
-        @page {
-            size: A4;
-            margin: 10mm;
-        }
+        /* Zero page margin; the body padding below provides the visible margin.
+           This keeps the layout identical whether the sheet is printed by the
+           browser, the silent kiosk printer, or rendered to a one-page PDF.
+           The body is a fixed A4-ish width so its measured height (used to
+           auto-scale the PDF onto a single page) is deterministic. */
+        @page { size: A4; margin: 0; }
+
+        * { box-sizing: border-box; }
+        html, body { margin: 0; }
 
         body {
+            width: 788px;
+            padding: 30px;
             font-family: Calibri, Arial, sans-serif;
-            font-size: 7.5pt;
-            margin: 0;
+            color: #1a2228;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
         }
 
-        h1 {
-            font-size: 12pt;
-            margin: 0 0 6px;
+        .hd {
+            display: flex; justify-content: space-between; align-items: flex-end;
+            border-bottom: 2px solid #2d3c45; padding-bottom: 6px; margin-bottom: 8px;
         }
+        .hd h1 { font-size: 15px; margin: 0; color: #2d3c45; }
+        .hd .meta { text-align: right; font-size: 9px; color: #555; line-height: 1.45; }
 
-        .sub {
-            font-size: 8pt;
-            color: #444;
-            margin: 0 0 8px;
+        .range { font-size: 11px; margin: 0 0 8px; }
+        .range b { color: #00618a; }
+        .range .arrow { color: #69757f; padding: 0 4px; }
+
+        table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        th, td {
+            border: 1px solid #b9c0c8; padding: 0 4px;
+            font-size: 8px; line-height: 1.0; text-align: left;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        th,
-        td {
-            border: 1px solid #999;
-            padding: 1px 3px;
-            text-align: left;
-            white-space: nowrap;
-            overflow: hidden;
-        }
-
         th {
-            background: #eee;
+            background: #e9edf0; font-size: 7.5px; color: #2d3c45;
+            text-transform: uppercase; letter-spacing: .02em;
         }
-
-        td.amt {
-            text-align: right;
-        }
-
-        td.desc {
-            white-space: normal;
-        }
-
-        @media print {
-            body {
-                -webkit-print-color-adjust: exact;
-            }
-        }
+        td.amt, th.amt { text-align: right; font-variant-numeric: tabular-nums; }
+        tbody tr:nth-child(even) td { background: #f6f8f9; }
     </style>
 </head>
 
 <body>
-    <h1>Transaction Backup &mdash; Batch {{ batch_id }}</h1>
-    <p class="sub">{{ count }} rows archived from transaction-backup.csv</p>
+    <div class="hd">
+        <h1>Working Fund &mdash; Transaction Backup</h1>
+        <div class="meta">
+            Batch {{ batch_id }}<br>
+            WF period {{ periods }}
+        </div>
+    </div>
+
+    <p class="range">
+        <b>{{ count }}</b> entries
+        <span class="arrow">&nbsp;|&nbsp;</span>
+        {{ date_start }} <span class="arrow">&rarr;</span> {{ date_end }}
+    </p>
+
     <table>
-        <tr>
-            <th>#</th>
-            <th>Recorded</th>
-            <th>Mission</th>
-            <th>Period</th>
-            <th>Beneficiary</th>
-            <th>Account</th>
-            <th>Description</th>
-            <th>Amount</th>
-            <th>Method</th>
-        </tr>
-        {% for r in rows %}
-        <tr>
-            <td>{{ loop.index }}</td>
-            <td>{{ r.recorded_at[:16] }}</td>
-            <td>{{ r.mission }}</td>
-            <td>{{ r.fund_period }}</td>
-            <td>{{ r.beneficiary }}</td>
-            <td>{{ r.account_name }}</td>
-            <td class="desc">{{ r.description }}</td>
-            <td class="amt">{{ r.amount }} {{ r.currency }}</td>
-            <td>{{ r.method }}</td>
-        </tr>
-        {% endfor %}
+        <colgroup>
+            <col style="width:22px"><col style="width:88px"><col style="width:44px">
+            <col style="width:36px"><col style="width:116px"><col style="width:138px">
+            <col><col style="width:76px"><col style="width:48px">
+        </colgroup>
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Recorded</th>
+                <th>Mission</th>
+                <th>Period</th>
+                <th>Beneficiary</th>
+                <th>Account</th>
+                <th>Description</th>
+                <th class="amt">Amount</th>
+                <th>Method</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in rows %}
+            <tr>
+                <td>{{ loop.index }}</td>
+                <td>{{ r.recorded_at[:16].replace('T', ' ') }}</td>
+                <td>{{ r.mission }}</td>
+                <td>{{ r.fund_period }}</td>
+                <td>{{ r.beneficiary }}</td>
+                <td>{{ r.account_name }}</td>
+                <td>{{ r.description }}</td>
+                <td class="amt">{{ r.amount }} {{ r.currency }}</td>
+                <td>{{ r.method }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
     </table>
+
     {% if auto_print %}<script>
         window.addEventListener('load', function () { setTimeout(function () { window.print(); }, 300); });
         window.addEventListener('afterprint', function () { window.close(); });

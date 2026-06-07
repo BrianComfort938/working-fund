@@ -1,14 +1,7 @@
-"""MongoDB Atlas access via pymongo. Returns None from fetch when no MONGODB_URI
-is configured, which signals the app to use demo data.
-
-The connection string is read from local/secret_config.py (a plain variable in
-code, gitignored) rather than an environment variable. Copy
-secret_config.example.py to secret_config.py and paste your string in."""
-
 try:
     from pymongo import MongoClient
     from bson import ObjectId
-except Exception:  # pymongo not installed yet
+except Exception:
     MongoClient = None
     ObjectId = None
 
@@ -16,7 +9,7 @@ try:
     import secret_config
     _URI = (getattr(secret_config, "MONGODB_URI", "") or "").strip()
     _DB_NAME = getattr(secret_config, "MONGODB_DB", "workingfund") or "workingfund"
-except Exception:  # secret_config.py not created yet -> demo mode
+except Exception:
     _URI = ""
     _DB_NAME = "workingfund"
 
@@ -39,9 +32,6 @@ def is_cloud():
 
 
 def fetch_all(mission=None):
-    """Return ALL transaction docs (optionally filtered to one mission), or None
-    if no cloud is configured (demo). The review app shows everything on the
-    cloud, since approve/delete now remove documents entirely."""
     col = _connect()
     if col is None:
         return None
@@ -52,8 +42,6 @@ def fetch_all(mission=None):
 
 
 def delete_tx(tx_id):
-    """Delete the whole document (its receipts + signature live inside it, so they
-    go with it). Called on both approve and delete."""
     col = _connect()
     if col is None:
         return

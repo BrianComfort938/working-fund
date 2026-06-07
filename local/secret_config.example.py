@@ -11,7 +11,12 @@ MONGODB_URI = "mongodb+srv://USER:PASSWORD@cluster0.xxxxx.mongodb.net/?retryWrit
 MONGODB_DB = "workingfund"
 
 # --- Local MySQL ledger -----------------------------------------------------
-# Set MYSQL_ENABLED = False on machines without a local MySQL server.
+# Approved transactions are mirrored into a local MySQL table. The table is
+# created automatically on first write, so a fresh database needs no setup.
+# These are just the DEFAULTS: the review portal's Settings panel can change the
+# table name, host, etc. at runtime, saving overrides to app_settings.json
+# (gitignored) without touching this file. Set MYSQL_ENABLED = False on machines
+# without a local MySQL server.
 MYSQL_ENABLED = False
 MYSQL_HOST = "localhost"
 MYSQL_PORT = 3306

@@ -22,6 +22,10 @@ local/workingfund.db
 local/pettycash.db
 local/.env
 
+# Runtime settings written by the review portal's Settings panel (may hold the
+# MySQL password), so it stays out of git just like secret_config.py.
+local/app_settings.json
+
 # OS
 .DS_Store
 Thumbs.db

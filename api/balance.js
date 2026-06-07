@@ -1,9 +1,3 @@
-// /api/balance
-//   GET ?mission=east|south -> { wave: number|null, mission }
-//   PUT body { wave: number, mission } -> stores the absolute Wave balance
-// The Wave balance is kept PER MISSION (east and south are separate funds), so
-// each mission has its own document in system_settings. The phone computes the
-// new balance after a Wave payment and PUTs it here (single-user, no double-count).
 const { getDb } = require("./_lib/db");
 const { withCors, readBody } = require("./_lib/cors");
 
