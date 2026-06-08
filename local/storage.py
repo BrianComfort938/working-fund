@@ -56,10 +56,11 @@ def _row_from_tx(tx, fund_period):
 
 
 def write_sqlite(tx, fund_period):
+    """Insert one approved transaction locally and return its row id (int)."""
     init_db()
     row = _row_from_tx(tx, fund_period)
     con = sqlite3.connect(DB_PATH)
-    con.execute(
+    cur = con.execute(
         """INSERT INTO transactions
            (recorded_at,mission,fund_period,beneficiary,account_code,account_name,
             description,amount,currency,method,signed,transaction_id,logged_at)
@@ -69,8 +70,10 @@ def write_sqlite(tx, fund_period):
          row["currency"], row["method"], row["signed"], row["transaction_id"],
          datetime.now().isoformat()),
     )
+    new_id = cur.lastrowid
     con.commit()
     con.close()
+    return new_id
 
 
 def append_csv(tx, fund_period):

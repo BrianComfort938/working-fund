@@ -273,6 +273,19 @@ def api_signature(tx_id):
     return Response(_signature_svg(t["signature"]), mimetype="image/svg+xml")
 
 
+def _cleanup_cloud_async(tx_id, receipts=False):
+    """Delete a transaction off the cloud (and optionally its local receipt files)
+    on a background thread, so the approve/delete response never waits on Atlas."""
+    def _work():
+        try:
+            cloud.delete_tx(tx_id)
+        except Exception as e:
+            app.logger.warning("cloud delete failed: %s", e)
+        if receipts:
+            storage.delete_receipts(tx_id)
+    threading.Thread(target=_work, daemon=True).start()
+
+
 @app.route("/api/approve/<tx_id>", methods=["POST"])
 def api_approve(tx_id):
     t = _find(tx_id)
@@ -282,13 +295,15 @@ def api_approve(tx_id):
     _apply_edits(t, data)
     period = STATE["period"]
     storage.save_signature(t["id"], t.get("signature"))
-    storage.write_sqlite(t, period)
+    local_id = storage.write_sqlite(t, period)
     storage.append_csv(t, period)
     rollover = storage.rollover_if_needed()
-    mysql_ledger.write(t, period)
-    # Drop any receipts the reviewer chose to leave off the printed record. Storage
-    # never keeps the images, so this only affects what gets printed. Both the
-    # server side render and the print tab fallback read this same copy in memory.
+    # The printed record is stamped with the SQL primary key, so the ledger write
+    # must finish first. These are fast local/LAN writes; only the cloud delete
+    # below is slow, and that is what we push off-thread.
+    ledger_id = mysql_ledger.write(t, period)
+    record_id = ledger_id if ledger_id is not None else local_id
+    t["recordId"] = record_id
     exclude = set(data.get("excludeReceipts") or [])
     if "main" in exclude:
         t["receiptImage"] = ""
@@ -298,20 +313,13 @@ def api_approve(tx_id):
     if rollover:
         batch_html = _render_csv_batch_html(rollover, auto_print=False)
         if batch_html:
-            # Save a one-page PDF backup of the 100 archived rows, then also send
-            # it to the printer if this machine can. Either may be unavailable;
-            # the CSV in printed-batches/ is the durable copy regardless.
             printing.save_pdf_async(batch_html, storage.batch_pdf_path(rollover), tag="csvbatch")
             if printing.print_html_async(batch_html, tag="csvbatch"):
                 rollover = None
     _remember_handled(t)
-    try:
-        cloud.delete_tx(t["id"])
-    except Exception as e:
-        app.logger.warning("cloud delete (approve) failed: %s", e)
-    storage.delete_receipts(t["id"])
     STATE["all"] = [x for x in STATE["all"] if x["id"] != t["id"]]
-    return jsonify({"ok": True, "rollover": rollover, "printed": printed})
+    _cleanup_cloud_async(t["id"], receipts=True)
+    return jsonify({"ok": True, "rollover": rollover, "printed": printed, "id": record_id})
 
 
 @app.route("/api/delete/<tx_id>", methods=["POST"])
@@ -320,11 +328,8 @@ def api_delete(tx_id):
     if not t:
         abort(404)
     _remember_handled(t)
-    try:
-        cloud.delete_tx(t["id"])
-    except Exception as e:
-        app.logger.warning("cloud delete failed: %s", e)
     STATE["all"] = [x for x in STATE["all"] if x["id"] != t["id"]]
+    _cleanup_cloud_async(t["id"])
     return jsonify({"ok": True})
 
 
@@ -369,7 +374,7 @@ def _render_record_html(t, auto_print):
         amount_str=_fmt_amount(t["amount"], t["currency"]),
         main_img=t.get("receiptImage", ""), wave_img=t.get("secondReceiptImage", ""),
         signature_svg=_signature_svg(t.get("signature")),
-        db_id=t.get("id", ""),
+        db_id=t.get("recordId") if t.get("recordId") is not None else "",
         db_table=mysql_ledger.table_name(),
         fund_period=STATE["period"],
         printed_at=datetime.now().strftime("%Y-%m-%d %H:%M"),
@@ -445,7 +450,7 @@ def main():
         print(f"  (Port 5000 was busy, so using {port} instead.)")
     print(f"  Open http://127.0.0.1:{port}/  (a browser tab should open automatically)\n")
     threading.Timer(1.0, _open_browser, args=(port,)).start()
-    app.run(host="127.0.0.1", port=port, debug=False)
+    app.run(host="127.0.0.1", port=port, debug=False, threaded=True)
 
 
 if __name__ == "__main__":

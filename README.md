@@ -53,11 +53,6 @@ mission/
 
 ## If something goes wrong
 
-- **It says Python is not installed.** Do Step 1 of the Quick start, and be sure
-  to tick "Add Python to PATH" while installing. Then try again.
-- **Setup will not finish.** This almost always means the computer is offline.
-  Connect to the internet and try again. The first run needs the internet to
-  fetch its pieces. After that it can run offline in Demo mode.
 - **No browser tab opened.** Look in the black window for a line like
   `Open http://127.0.0.1:5000/` and click it, or type that address into your web
   browser.

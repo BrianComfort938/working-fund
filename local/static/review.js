@@ -47,6 +47,10 @@
   const state = {
     queue: [], idx: 0, period: "000", mission: "east", counts: { east: 0, south: 0 },
     cloud: false, calRef: null, view: "review",
+    // Ids the reviewer has already approved/skipped/deleted this session. A
+    // background sync uses this to merge in newly-arrived cloud transactions
+    // without resurrecting ones the reviewer has already handled.
+    dismissed: new Set(), approving: false, syncing: false,
   };
 
   async function api(path, opts) {
@@ -68,8 +72,6 @@
     return String(s == null ? "" : s)
       .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
-  // Toggle the "darker, empty" look on a field whose value is blank, so every
-  // field stays present in the form even when there is nothing to show.
   function markEmpty(el, empty) { if (el) el.classList.toggle("is-empty", !!empty); }
 
   async function load() {
@@ -97,6 +99,41 @@
     state.counts = res.counts || state.counts;
     state.queue = res.queue;
     if (state.idx >= state.queue.length) state.idx = Math.max(0, state.queue.length - 1);
+  }
+
+  // Pull the latest cloud queue and merge in any transactions that arrived since
+  // we loaded, so new submissions appear without a manual page refresh. Items the
+  // reviewer already handled (approved/skipped/deleted) stay gone. Never re-renders
+  // a record that is open for editing — it only appends and refreshes the counters,
+  // except when the screen is empty, where it surfaces the first new arrival.
+  async function syncQueue() {
+    if (state.syncing) return;
+    state.syncing = true;
+    try {
+      const s = await api("/api/state");
+      if (s.mission !== state.mission) return; // a mission switch is in flight
+      state.period = s.period;
+      state.cloud = s.cloud;
+      const have = new Set(state.queue.map((t) => t.id));
+      const fresh = (s.queue || []).filter((t) => !have.has(t.id) && !state.dismissed.has(t.id));
+      const wasEmpty = !cur();
+      if (fresh.length) state.queue.push(...fresh);
+      // The current mission's true count is what's actually in the queue (server
+      // counts still include client-only skips); trust the server for the other.
+      const other = state.mission === "east" ? "south" : "east";
+      state.counts[state.mission] = state.queue.length;
+      if (s.counts && typeof s.counts[other] === "number") state.counts[other] = s.counts[other];
+      if (wasEmpty && state.queue.length) { state.idx = 0; renderAll(); }
+      else if (state.view === "review") {
+        $("progress").textContent = state.queue.length ? `${state.idx + 1} / ${state.queue.length}` : "0 / 0";
+        $("cntEast").textContent = state.counts.east || 0;
+        $("cntSouth").textContent = state.counts.south || 0;
+      }
+    } catch (_) {
+      // Offline or a transient error — leave the current queue as-is.
+    } finally {
+      state.syncing = false;
+    }
   }
   async function switchMission(m) {
     if (MISSIONS.indexOf(m) === -1 || m === state.mission) return;
@@ -527,23 +564,43 @@
     return { beneficiary: t.beneficiary, mission: t.mission, accountCode: t.accountCode, accountName: t.accountName, description: t.description, amount: t.amount, method: t.method };
   }
 
+  function setApproveBusy(busy) {
+    const btn = $("actApprove");
+    if (btn) { btn.classList.toggle("is-busy", busy); btn.disabled = busy; }
+    const skipB = $("actSkip"), delB = $("actDelete");
+    if (skipB) skipB.disabled = busy;
+    if (delB) delB.disabled = busy;
+  }
+
   async function approve() {
+    if (state.approving) return;            // ignore repeat Enter / double-click
     const t = cur();
     if (!t) return;
+    state.approving = true;
+    setApproveBusy(true);
     const excludeReceipts = t.excluded ? Object.keys(t.excluded).filter((k) => t.excluded[k]) : [];
     try {
       const res = await api(`/api/approve/${t.id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(Object.assign({}, editPayload(t), { excludeReceipts })) });
       if (!res.printed) window.open(`/print/${t.id}`, "_blank");
+      const tag = res.id != null && res.id !== "" ? " #" + res.id : "";
       if (res.rollover) { toast("CSV hit 100 lines, printing backup sheet", "ok"); window.open(`/print/csv-batch/${res.rollover}`, "_blank"); }
-      else toast(res.printed ? "Approved & printed" : "Approved & printing", "ok");
+      else toast((res.printed ? "Approved & printed" : "Approved & printing") + tag, "ok");
       pushHist(HKEY_COMMITTED, snapshot(t));
-      removeCurrent(true);
-    } catch (e) { toast("Approve failed", "err"); }
+      state.dismissed.add(t.id);
+      removeCurrent(true);    // advance locally now; the re-render gives a fresh button
+      syncQueue();            // then quietly pull any transactions that arrived since
+    } catch (e) {
+      toast("Approve failed", "err");
+      setApproveBusy(false);  // form wasn't re-rendered, so re-enable the buttons
+    } finally {
+      state.approving = false;
+    }
   }
 
   function skip() {
     const t = cur();
     if (!t) return;
+    state.dismissed.add(t.id);
     removeCurrent(true);
     toast("Skipped (stays on cloud)", "ok");
   }
@@ -563,6 +620,7 @@
     try {
       await api(`/api/delete/${t.id}`, { method: "POST" });
       pushHist(HKEY_DELETED, snapshot(t));
+      state.dismissed.add(t.id);
       const i = state.queue.findIndex((x) => x.id === t.id);
       if (i >= 0) { state.idx = i; removeCurrent(true); }
       toast("Deleted from cloud", "ok");
@@ -577,7 +635,7 @@
     renderAll();
   }
   function move(delta) {
-    if (!state.queue.length) return;
+    if (state.approving || !state.queue.length) return;
     state.idx = (state.idx + delta + state.queue.length) % state.queue.length;
     renderAll();
   }
@@ -613,6 +671,7 @@
       await api("/api/restore", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: snap.id, status, tx: snap }) });
       items.splice(idx, 1);
       localStorage.setItem(key, JSON.stringify(items));
+      state.dismissed.delete(snap.id);
       await refreshState();
       renderAll();
       toast(status === "committed" ? "Reversed. Returned to review, local record undone" : "Reversed. Returned to review", "ok");
@@ -700,7 +759,7 @@
       MYSQL_DB: $("myDb").value.trim(),
       MYSQL_USER: $("myUser").value.trim(),
       MYSQL_TABLE: $("myTable").value.trim(),
-      MYSQL_PASSWORD: $("myPassword").value, // blank means "leave unchanged"
+      MYSQL_PASSWORD: $("myPassword").value,
     };
   }
   function applyMysql(m) {
@@ -740,9 +799,6 @@
     } catch (e) { setMyStatus("Test failed (server error).", "err"); }
   }
 
-  // Excel-style key tips. Press Alt to paint a key hint over every control in the
-  // review view; press the shown key to use that control. Each entry resolves its
-  // element live, because the form is re-rendered for every transaction.
   const KEYTIPS = [
     { code: "b", label: "B", el: () => $("f_ben") },
     { code: "m", label: "M", el: () => $("f_mission") },
@@ -776,7 +832,13 @@
     if (!el) return;
     if (/^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName)) {
       el.focus();
-      if (el.tagName !== "SELECT" && el.select) { try { el.select(); } catch (_) {} }
+      if (el.tagName === "SELECT") {
+        // Expand the dropdown so every option is visible; arrows then move the
+        // highlight and Enter confirms it (handled natively while it's open).
+        try { if (typeof el.showPicker === "function") el.showPicker(); } catch (_) {}
+      } else if (el.select) {
+        try { el.select(); } catch (_) {}
+      }
     } else {
       el.click();
     }
@@ -842,7 +904,11 @@
     const tag = e.target.tagName;
     const inField = /^(INPUT|TEXTAREA|SELECT)$/.test(tag);
     if (e.key === "Enter") {
-      if (tag === "TEXTAREA") return;
+      // Shift+Enter always approves, whatever has focus (textarea, dropdown, etc.).
+      if (e.shiftKey) { e.preventDefault(); approve(); return; }
+      // Plain Enter: in a textarea insert a newline; in a select confirm the
+      // highlighted option — never approve the record while a dropdown has focus.
+      if (tag === "TEXTAREA" || tag === "SELECT") return;
       e.preventDefault(); approve(); return;
     }
     if (inField) { if (e.key === "Escape") e.target.blur(); return; }
@@ -872,8 +938,18 @@
     $("confirmCancel").addEventListener("click", () => { $("confirmModal").classList.add("hidden"); pendingDelete = null; });
     $("confirmOk").addEventListener("click", doDelete);
     document.addEventListener("keydown", onKey);
-    // Swallow the lone-Alt keyup so the browser does not pull focus to its menu bar.
     document.addEventListener("keyup", (e) => { if (e.key === "Alt" && state.view === "review") e.preventDefault(); });
     load().catch(() => toast("Could not load transactions", "err"));
+
+    // Poll for newly-arrived transactions so the reviewer never has to refresh.
+    // Skipped while busy, hidden, or in a modal so it can't disturb live work.
+    // Gentle interval: every approve already triggers an immediate sync, and each
+    // poll re-fetches receipt images from the cloud, so we keep idle traffic low.
+    setInterval(() => {
+      if (state.view !== "review" || state.approving || state.syncing || document.hidden) return;
+      if (!$("settingsModal").classList.contains("hidden")) return;
+      if (!$("confirmModal").classList.contains("hidden")) return;
+      syncQueue();
+    }, 30000);
   });
 })();

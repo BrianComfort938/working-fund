@@ -352,7 +352,6 @@ optgroup { font-style: normal; }
 .mission-card.open .mission-chev { transform: rotate(180deg); }
 .mission-seg { margin: 0 14px 14px; }
 
-/* Dark mode: give cards and popovers readable depth on the dark background. */
 :root[data-theme="dark"] .card { box-shadow: 0 1px 2px rgba(0, 0, 0, .4); }
 :root[data-theme="dark"] .ac-panel,
 :root[data-theme="dark"] .combo-panel,

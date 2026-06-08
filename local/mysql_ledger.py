@@ -33,8 +33,6 @@ def driver_available():
 def _table_name():
     table = _get("MYSQL_TABLE", DEFAULT_TABLE) or DEFAULT_TABLE
     table = str(table).strip()
-    # Identifiers can't be parameterized, so reject anything but word characters
-    # to keep the f-string interpolation below injection-proof.
     return table if settings.valid_table_name(table) else DEFAULT_TABLE
 
 
@@ -110,8 +108,14 @@ def _ensure_table(conn, table):
 
 
 def write(tx, fund_period):
+    """Insert one approved transaction and return its new primary-key id.
+
+    Returns the table's AUTO_INCREMENT `id` (an int) so the caller can stamp it
+    on the printed record. Returns None when the mirror is disabled or the write
+    fails, so callers can fall back to another identifier.
+    """
     if not is_enabled():
-        return False
+        return None
 
     table = _table_name()
     method = METHOD_TO_CODE.get(tx.get("method", ""), tx.get("method", ""))
@@ -137,15 +141,16 @@ def write(tx, fund_period):
                 "VALUES (%s, %s, %s, %s, %s, %s, %s)",
                 params,
             )
+            new_id = cur.lastrowid
         conn.commit()
-        return True
+        return new_id
     except Exception as e:
         try:
             from flask import current_app
             current_app.logger.warning("MySQL ledger write failed: %s", e)
         except Exception:
             print(f"[MySQL Error] {e}")
-        return False
+        return None
     finally:
         if conn is not None:
             try:

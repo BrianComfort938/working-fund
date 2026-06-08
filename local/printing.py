@@ -146,12 +146,6 @@ def print_html_async(html, tag="record"):
     return True
 
 
-# --- PDF rendering ----------------------------------------------------------
-# A4 in centimetres (the units Selenium's print command expects) and the full
-# A4 height in CSS pixels at 96 dpi. The CSV backup template lays itself out on a
-# fixed-width "page" with zero page margin, so the whole body must fit inside
-# this height to stay on one sheet. We measure the rendered body and shrink the
-# print scale just enough to guarantee that, with a few pixels of safety.
 A4_CM = (21.0, 29.7)
 A4_HEIGHT_PX = 1122.0
 PDF_SAFETY_PX = 6.0

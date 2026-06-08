@@ -727,7 +727,6 @@
     if (toastTimer) clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.add("hidden"), 2600);
   }
 
-  // Dark mode follows the time of day: dark from 7pm to 6am, light otherwise.
   function isNightTime() { const h = new Date().getHours(); return h >= 19 || h < 6; }
   function applyAutoTheme() {
     const dark = isNightTime();

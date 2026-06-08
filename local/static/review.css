@@ -172,8 +172,6 @@ main#historyView {
 .set-list { margin: 2px 0; padding-left: 18px; font-size: 12.5px; color: var(--text); line-height: 1.45; }
 .set-list li { margin: 2px 0; }
 
-/* MySQL ledger settings. Its own section class (not .set-field) so the period
-   field's compact input styling does not leak into these text inputs. */
 .set-section { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--border); padding-top: 14px; }
 .set-sec-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; font-weight: 700; }
 .set-check { display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; color: var(--text); cursor: pointer; }
@@ -207,7 +205,6 @@ main#historyView {
   outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-soft);
 }
 .rec-field textarea { resize: vertical; }
-/* Empty fields stay present but show a darker fill so it reads as "nothing here". */
 .rec-field input.is-empty, .rec-field textarea.is-empty, .rec-field select.is-empty {
   background: var(--empty);
 }
@@ -229,7 +226,6 @@ a.loc-link:hover { text-decoration: underline; }
 .acct-hint { display: inline-flex; align-items: center; gap: 8px; margin-top: 4px; font-size: 12.5px; color: var(--muted); }
 .acct-hint .swatch { width: 11px; height: 11px; border-radius: 2px; }
 
-/* Fixed height so the form's spacing never changes with the number of receipts. */
 .receipts { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-start; height: 168px; overflow: hidden; }
 .receipts figure { margin: 0; display: flex; flex-direction: column; gap: 6px; }
 .receipts figcaption { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
@@ -240,7 +236,6 @@ a.loc-link:hover { text-decoration: underline; }
   border: 1px dashed var(--border-strong); border-radius: var(--radius);
 }
 
-/* Receipt thumbnail, hover to enlarge */
 .receipt-img-wrap { position: relative; display: inline-block; cursor: zoom-in; }
 .receipt-thumb {
   display: block; max-width: 200px; max-height: 110px;
@@ -249,7 +244,6 @@ a.loc-link:hover { text-decoration: underline; }
 }
 .receipt-img-wrap:hover .receipt-thumb { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-soft); }
 
-/* Enlarged preview, fixed so it escapes the scrollable column and never clips */
 .receipt-zoom {
   position: fixed; top: 50%; left: 50%;
   transform: translate(-50%, -50%) scale(.97);
@@ -265,7 +259,6 @@ a.loc-link:hover { text-decoration: underline; }
   z-index: 199; pointer-events: none;
 }
 
-/* Remove / add-back from printing */
 .receipt-toggle {
   align-self: stretch; cursor: pointer; font-family: inherit; font-size: 11.5px; font-weight: 600;
   padding: 5px 8px; border-radius: var(--radius);
@@ -308,6 +301,14 @@ a.loc-link:hover { text-decoration: underline; }
 .btn.approve { background: var(--ok); border-color: #266b2a; color: #fff; flex: 2; }
 .btn.skip { background: var(--panel-alt); }
 .btn.delete { background: var(--panel); border-color: var(--danger); color: var(--danger); }
+.btn:disabled { opacity: .6; cursor: default; }
+.btn.is-busy { position: relative; color: transparent !important; pointer-events: none; opacity: 1; }
+.btn.is-busy::after {
+  content: ""; position: absolute; top: 50%; left: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px;
+  border: 2px solid rgba(255, 255, 255, .45); border-top-color: #fff; border-radius: 50%;
+  animation: btn-spin .6s linear infinite;
+}
+@keyframes btn-spin { to { transform: rotate(360deg); } }
 .btn.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
 .btn.danger-btn { background: var(--danger); border-color: var(--danger); color: #fff; }
 
@@ -389,7 +390,6 @@ kbd {
 .toast.ok { background: #1e5b32; border-color: #154425; }
 .toast.err { background: #8f2018; border-color: #6f180f; }
 
-/* Excel-style key tips: a yellow key badge painted over each control on Alt. */
 .keytip-layer { position: fixed; inset: 0; z-index: 300; pointer-events: none; }
 .keytip {
   position: fixed; transform: translate(-50%, -50%);

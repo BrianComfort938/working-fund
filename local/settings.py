@@ -1,12 +1,3 @@
-"""Runtime-editable settings overlay.
-
-Defaults come from secret_config.py (gitignored, holds the credentials). The
-review portal's Settings panel can override the MySQL ledger fields at runtime,
-and those overrides are persisted to app_settings.json (also gitignored) so they
-survive a restart. secret_config.py is never rewritten.
-
-Lookup order for a setting:  app_settings.json  →  secret_config.py  →  hard default.
-"""
 import os
 import re
 import json
@@ -23,9 +14,6 @@ SETTINGS_PATH = os.path.join(BASE, "app_settings.json")
 _lock = threading.RLock()
 _cache = None
 
-# The only settings the UI is allowed to change, with their hard defaults (used
-# when secret_config.py does not define them). MYSQL_PASSWORD is write-only: it
-# is never sent back to the browser, only updated when a new value is supplied.
 MYSQL_DEFAULTS = {
     "MYSQL_ENABLED": False,
     "MYSQL_HOST": "localhost",
@@ -107,7 +95,7 @@ def update(values):
                 continue
             raw = values[key]
             if key == "MYSQL_PASSWORD":
-                if raw:                       # only overwrite when a value is given
+                if raw:
                     overlay[key] = str(raw)
                 continue
             if key == "MYSQL_PORT":
