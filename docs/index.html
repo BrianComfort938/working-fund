@@ -126,6 +126,7 @@
           <button type="button" class="btn" id="collectSigBtn">Collect signature</button>
           <button type="button" class="btn hidden" id="removeSigBtn">Remove</button>
         </div>
+        <p class="hint hidden" id="sigDefaultNote">Using the saved default signature for this name &mdash; draw to replace it.</p>
       </div>
 
       <div id="geoStatus" class="geo-status" aria-live="polite"></div>
@@ -152,6 +153,15 @@
           stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6" /></svg>
       </summary>
       <div class="settings-body">
+        <div class="presets-head">
+          <span class="field-label">Default signatures</span>
+          <button type="button" id="openSigLib" class="link-btn">Manage</button>
+        </div>
+        <p class="hint">Save a signature for a person's name. When a transaction's
+          beneficiary matches a saved name (not case-sensitive) and you have not
+          drawn a signature, that signature is used automatically. Saved only in
+          this browser.</p>
+
         <span class="field-label">Local storage on this device</span>
         <p class="hint">This portal works offline and keeps everything in this browser, on
           this phone only. Nothing is shared between devices:</p>
@@ -164,6 +174,8 @@
           <li><strong>Autofill:</strong> details from past entries to speed up typing
             (no photos).</li>
           <li><strong>Presets:</strong> your quick fill buttons.</li>
+          <li><strong>Default signatures:</strong> a saved signature per name, used when
+            the beneficiary matches and none was drawn.</li>
         </ul>
         <p class="hint">Clearing this browser's site data, or the Clear buttons in the app,
           removes it. Once a transaction syncs, it lives on the server.</p>
@@ -230,6 +242,39 @@
         <span class="spacer"></span>
         <button id="cancelPreset" class="btn">Close</button>
         <button id="savePreset" class="btn primary">Save preset</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="sigLibModal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head"><h2>Default signatures</h2></div>
+      <p class="hint">When a transaction's beneficiary matches a saved name
+        (not case-sensitive) and no signature has been drawn, the matching
+        signature is used automatically. Saved only in this browser.</p>
+
+      <div id="sigLibList" class="sig-lib-list"></div>
+
+      <div class="preset-form">
+        <div class="field">
+          <span class="field-label">Name</span>
+          <input id="sigLibName" type="text" placeholder="Full name on the beneficiary field" autocomplete="off">
+        </div>
+        <div class="field">
+          <span class="field-label">Signature</span>
+          <div id="sigLibPreview" class="sig-preview empty"><span class="sig-empty-text">No signature</span></div>
+          <div class="photo-actions">
+            <button type="button" class="btn" id="sigLibCollect">Collect signature</button>
+            <button type="button" class="btn hidden" id="sigLibRemove">Remove</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button id="sigLibCancelEdit" class="link-btn hidden">Cancel edit</button>
+        <span class="spacer"></span>
+        <button id="sigLibClose" class="btn">Close</button>
+        <button id="sigLibSave" class="btn primary">Save signature</button>
       </div>
     </div>
   </div>
