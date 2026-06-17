@@ -123,10 +123,56 @@ def update(values):
             else:
                 overlay[key] = str(raw).strip()
 
-        global _cache
-        _cache = overlay
-        tmp = SETTINGS_PATH + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(overlay, f, indent=2)
-        os.replace(tmp, SETTINGS_PATH)
+        _persist(overlay)
         return mysql_config()
+
+
+def _persist(overlay):
+    global _cache
+    _cache = overlay
+    tmp = SETTINGS_PATH + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(overlay, f, indent=2)
+    os.replace(tmp, SETTINGS_PATH)
+
+
+# --- Working fund -----------------------------------------------------------
+# The starting amount is kept per mission+period (a fresh fund each period), and
+# the balance mode decides whether the dashboard counts only recorded (DB)
+# transactions or also those still sitting in the review queue.
+
+def balance_mode():
+    return "all" if get("FUND_BALANCE_MODE", "recorded") == "all" else "recorded"
+
+
+def set_balance_mode(mode):
+    with _lock:
+        overlay = dict(_load())
+        overlay["FUND_BALANCE_MODE"] = "all" if str(mode) == "all" else "recorded"
+        _persist(overlay)
+        return overlay["FUND_BALANCE_MODE"]
+
+
+def _fund_key(mission, period):
+    return f"{mission}:{period}"
+
+
+def fund_start(mission, period):
+    starts = get("WF_START", {}) or {}
+    try:
+        return int(starts.get(_fund_key(mission, period), 0) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def set_fund_start(mission, period, value):
+    with _lock:
+        overlay = dict(_load())
+        starts = dict(overlay.get("WF_START", {}) or {})
+        try:
+            starts[_fund_key(mission, period)] = int(value)
+        except (TypeError, ValueError):
+            starts[_fund_key(mission, period)] = 0
+        overlay["WF_START"] = starts
+        _persist(overlay)
+        return starts[_fund_key(mission, period)]

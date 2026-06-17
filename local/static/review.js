@@ -135,7 +135,7 @@
     const reviewing = state.view === "review";
     $("reviewView").classList.toggle("hidden", !reviewing);
     $("historyView").classList.toggle("hidden", reviewing);
-    if (reviewing) { renderReview(); renderCalendar(); renderLocation(); renderTimeBanner(); }
+    if (reviewing) { renderReview(); renderCalendar(); renderLocation(); renderTimeBanner(); loadFund(); }
     else renderHistory();
   }
 
@@ -694,7 +694,32 @@
       localStorage.setItem("workingfund_period", res.period);
       const pb = $("periodBadge"); if (pb) pb.textContent = "WF " + res.period;
       toast("Fund period " + res.period, "ok");
+      loadFund();
     } catch (e) { toast("Invalid period (000-999)", "err"); $("period").value = state.period; }
+  }
+
+  function dashboardUrl() {
+    return "/dashboard?mission=" + encodeURIComponent(state.mission) + "&period=" + encodeURIComponent(state.period);
+  }
+  function renderFund(f) {
+    const box = $("fundBox");
+    if (!box) return;
+    const neg = f.remaining < 0;
+    box.classList.remove("hidden");
+    box.innerHTML =
+      `<span class="fund-top"><span class="fund-label">Working fund</span>` +
+      `<span class="fund-mode">${f.mode === "all" ? "+ in review" : "recorded"}</span></span>` +
+      `<span class="fund-remaining ${neg ? "neg" : ""}">${groupDigits(Math.abs(f.remaining))}` +
+      `<span class="fund-cur">XOF${neg ? " over" : ""}</span></span>` +
+      `<span class="fund-detail"><span>Start <b>${groupDigits(f.start)}</b></span>` +
+      `<span>Spent <b>${groupDigits(f.spent)}</b></span></span>` +
+      `<span class="fund-foot">${f.recordedCount} recorded` +
+      `${f.mode === "all" && f.pendingCount ? " &middot; " + f.pendingCount + " in review" : ""} &middot; tap to open</span>`;
+  }
+  async function loadFund() {
+    try {
+      renderFund(await api(`/api/fund?mission=${encodeURIComponent(state.mission)}&period=${encodeURIComponent(state.period)}`));
+    } catch (_) {}
   }
 
   function showHistory() { state.view = "history"; renderAll(); }
@@ -736,6 +761,30 @@
       if (s.mysqlDriver === false) setMyStatus("pymysql isn't installed on this computer, so the MySQL mirror is off. Run: pip install -r requirements.txt", "err");
       else setMyStatus("");
     } catch (_) { setMyStatus("Could not load settings.", "err"); }
+    try {
+      const f = await api(`/api/fund?mission=${encodeURIComponent(state.mission)}&period=${encodeURIComponent(state.period)}`);
+      $("fundStart").value = f.start ? String(f.start) : "";
+      $("balRecorded").checked = f.mode !== "all";
+      $("balAll").checked = f.mode === "all";
+      setFundStatus("");
+    } catch (_) { setFundStatus("Could not load the working fund.", "err"); }
+  }
+  function setFundStatus(msg, kind) {
+    const el = $("fundStatus");
+    if (!el) return;
+    el.textContent = msg || "";
+    el.className = "set-status" + (kind ? " " + kind : "");
+  }
+  async function saveFund() {
+    const start = parseInt(($("fundStart").value || "").replace(/\D/g, ""), 10);
+    const mode = $("balAll").checked ? "all" : "recorded";
+    try {
+      await api("/api/fund", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mission: state.mission, period: state.period, start: isNaN(start) ? 0 : start, mode }) });
+      setFundStatus("Saved.", "ok");
+      toast("Working fund saved", "ok");
+      loadFund();
+    } catch (e) { setFundStatus("Could not save.", "err"); toast("Save failed", "err"); }
   }
   async function saveMysql() {
     try {
@@ -883,6 +932,10 @@
     $("closeSettings").addEventListener("click", closeSettings);
     $("mySave").addEventListener("click", saveMysql);
     $("myTest").addEventListener("click", testMysql);
+    $("fundSave").addEventListener("click", saveFund);
+    $("fundStart").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); saveFund(); } });
+    $("openDashboard").addEventListener("click", () => window.open(dashboardUrl(), "_blank"));
+    $("fundBox").addEventListener("click", () => window.open(dashboardUrl(), "_blank"));
     ["myHost", "myPort", "myDb", "myUser", "myTable", "myPassword"].forEach((id) =>
       $(id).addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); saveMysql(); } }));
     $("settingsModal").addEventListener("click", (e) => { if (e.target.id === "settingsModal") closeSettings(); });

@@ -12,6 +12,7 @@
   <main id="reviewView">
     <aside class="col-time">
       <div id="timeBanner" class="time-banner"></div>
+      <button type="button" id="fundBox" class="fund-box hidden" title="Open the working-fund dashboard"></button>
     </aside>
     <section class="col-main">
       <div class="review-nav">
@@ -94,6 +95,28 @@
       <div class="set-field">
         <label for="period">Fund period</label>
         <input id="period" inputmode="numeric" maxlength="3" value="000" title="000-999">
+      </div>
+
+      <div class="set-section">
+        <div class="set-sec-label">Working fund</div>
+        <p class="set-note">Starting amount for the current mission and fund period (XOF).
+          Every transaction is subtracted from it; the running total shows under the
+          timeline and on the dashboard.</p>
+        <div class="set-grid">
+          <div class="set-cell wide">
+            <span class="set-cap">Starting amount</span>
+            <input id="fundStart" class="set-text" inputmode="numeric" placeholder="0" autocomplete="off">
+          </div>
+        </div>
+        <span class="set-cap">Balance counts</span>
+        <label class="set-check"><input type="radio" name="balMode" id="balRecorded" value="recorded"> Recorded transactions only (written to the database)</label>
+        <label class="set-check"><input type="radio" name="balMode" id="balAll" value="all"> Recorded plus transactions still in review</label>
+        <div class="set-actions">
+          <button type="button" class="btn" id="openDashboard">Open dashboard</button>
+          <span class="spacer"></span>
+          <button type="button" class="btn primary" id="fundSave">Save</button>
+        </div>
+        <p class="set-status" id="fundStatus"></p>
       </div>
 
       <div class="set-section set-mysql">

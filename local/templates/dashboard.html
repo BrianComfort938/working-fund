@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Working Fund: Dashboard</title>
+  <link rel="stylesheet" href="/static/review.css">
+  <style>
+    main.dash { max-width: 1180px; margin: 0 auto; padding: 18px; display: flex; flex-direction: column; gap: 16px; }
+    .dash-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .dash-head h1 { margin: 0; font-size: 20px; font-weight: 600; }
+    .dash-head .spacer { flex: 1; }
+    .dash-sub { font-size: 12.5px; color: var(--muted); }
+
+    .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    @media (max-width: 820px) { .cards { grid-template-columns: 1fr 1fr; } }
+    .card-stat {
+      background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 14px; box-shadow: 0 1px 2px rgba(20, 33, 42, .05); display: flex; flex-direction: column; gap: 4px;
+    }
+    .card-stat .k { font-size: 10.5px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+    .card-stat .v { font-family: var(--mono); font-size: 22px; font-weight: 700; }
+    .card-stat .v.pos { color: var(--ok); }
+    .card-stat .v.neg { color: var(--danger); }
+    .card-stat .v.blue { color: var(--blue); }
+    .card-stat .sub { font-size: 11px; color: var(--muted); }
+
+    .panels { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 820px) { .panels { grid-template-columns: 1fr; } }
+    .panel {
+      background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 16px; box-shadow: 0 1px 2px rgba(20, 33, 42, .05); min-width: 0;
+    }
+    .panel h2 { margin: 0 0 12px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+    .bar-row { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; align-items: baseline; margin-bottom: 9px; }
+    .bar-row:last-child { margin-bottom: 0; }
+    .bar-label { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bar-amt { font-family: var(--mono); font-size: 13px; font-weight: 700; text-align: right; }
+    .bar-amt.neg { color: var(--danger); }
+    .bar-track { grid-column: 1 / -1; height: 6px; background: var(--panel-alt); border-radius: 3px; overflow: hidden; }
+    .bar-fill { height: 100%; background: var(--blue); border-radius: 3px; }
+    .bar-fill.neg { background: var(--amber); }
+    .bar-count { font-size: 10.5px; color: var(--muted); }
+    .empty-note { color: var(--muted); font-size: 13px; }
+
+    .loc-list { display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow: auto; }
+    .loc-item {
+      display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: baseline;
+      padding: 8px 0; border-top: 1px solid var(--border);
+    }
+    .loc-item:first-child { border-top: none; }
+    .loc-item .who { font-size: 13.5px; }
+    .loc-item .amt { font-family: var(--mono); font-size: 13px; font-weight: 700; }
+    .loc-item .ll { grid-column: 1 / -1; font-size: 11.5px; }
+    .loc-item .ll a { color: var(--blue); text-decoration: none; font-family: var(--mono); }
+    .loc-item .ll a:hover { text-decoration: underline; }
+
+    .tx-wrap { overflow-x: auto; }
+    table.tx { width: 100%; border-collapse: collapse; font-size: 13px; }
+    table.tx th, table.tx td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    table.tx th { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 700; }
+    table.tx td.num, table.tx th.num { text-align: right; font-family: var(--mono); }
+    table.tx td.num.neg { color: var(--danger); }
+    table.tx tr:hover { background: var(--panel-alt); }
+    .src-tag { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; padding: 1px 6px; border-radius: 8px; }
+    .src-tag.pending { background: #fff7ec; border: 1px solid #e7c38a; color: #8a5a12; }
+    .src-tag.recorded { background: var(--blue-soft); border: 1px solid var(--blue); color: var(--blue); }
+    table.tx input, table.tx select { width: 100%; padding: 6px 7px; font-size: 13px; font-family: inherit;
+      border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--panel); color: var(--text); }
+    table.tx input.num { font-family: var(--mono); text-align: right; }
+    .row-actions { display: flex; gap: 6px; }
+    .mini-btn {
+      cursor: pointer; font-family: inherit; font-size: 11.5px; font-weight: 600; padding: 5px 9px;
+      border-radius: var(--radius); border: 1px solid var(--border-strong); background: var(--panel-alt); color: var(--text);
+    }
+    .mini-btn.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+    .mini-btn:disabled { opacity: .5; cursor: default; }
+    .loading { color: var(--muted); font-size: 14px; padding: 30px 0; text-align: center; }
+  </style>
+</head>
+
+<body>
+  <main class="dash">
+    <div class="dash-head">
+      <span id="missionPill" class="mission-pill east">East</span>
+      <h1>Working fund</h1>
+      <span id="periodBadge" class="period-badge">WF 000</span>
+      <span class="spacer"></span>
+      <span id="modeNote" class="dash-sub"></span>
+      <button type="button" class="btn" id="refreshBtn">Refresh</button>
+    </div>
+
+    <div id="cards" class="cards"></div>
+
+    <div class="panels">
+      <div class="panel"><h2>Spending by account</h2><div id="byAccount"></div></div>
+      <div class="panel"><h2>By method</h2><div id="byMethod"></div></div>
+      <div class="panel"><h2>By beneficiary</h2><div id="byBeneficiary"></div></div>
+      <div class="panel"><h2>By date</h2><div id="byDate"></div></div>
+    </div>
+
+    <div class="panel"><h2>Locations</h2><div id="locations"></div></div>
+
+    <div class="panel">
+      <h2>Transactions for this period</h2>
+      <div class="tx-wrap"><table class="tx" id="txTable"></table></div>
+      <p class="set-note" id="txNote" style="margin-top:10px"></p>
+    </div>
+  </main>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script>
+    (function () {
+      "use strict";
+      const $ = (id) => document.getElementById(id);
+      const params = new URLSearchParams(window.location.search);
+      const MISSION = params.get("mission") || "east";
+      const PERIOD = params.get("period") || "000";
+      const METHOD_LABELS = { cash: "Cash", wave: "Wave", orange: "Orange Money" };
+      const MISSIONS = ["east", "south"];
+      const titleCase = (m) => (m === "south" ? "South" : "East");
+      const groupDigits = (s) => String(s).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+      const xof = (n) => { n = parseInt(n, 10) || 0; return (n < 0 ? "-" : "") + groupDigits(Math.abs(n)) + " XOF"; };
+      const esc = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+      let DATA = null;
+      let editingId = null;
+
+      let toastTimer = null;
+      function toast(msg, kind) {
+        const t = $("toast"); t.textContent = msg; t.className = "toast" + (kind ? " " + kind : "");
+        if (toastTimer) clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.add("hidden"), 2400);
+        t.classList.remove("hidden");
+      }
+
+      async function api(path, opts) {
+        const r = await fetch(path, opts);
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.json();
+      }
+
+      function fmtDate(iso) {
+        if (!iso) return "—";
+        const d = new Date(iso);
+        if (isNaN(d)) return String(iso).slice(0, 10);
+        return d.toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+      }
+
+      function renderCards(s) {
+        const remNeg = s.remaining < 0;
+        const cards = [
+          { k: "Starting", v: xof(s.start), cls: "blue" },
+          { k: "Spent", v: xof(s.spent), cls: s.spent < 0 ? "pos" : "" , sub: s.mode === "all" ? "recorded + in review" : "recorded only" },
+          { k: "Remaining", v: xof(s.remaining) + (remNeg ? " over" : ""), cls: remNeg ? "neg" : "pos" },
+          { k: "Transactions", v: String(s.recordedCount + (s.mode === "all" ? s.pendingCount : 0)), sub: s.mode === "all" ? (s.recordedCount + " recorded · " + s.pendingCount + " in review") : (s.recordedCount + " recorded") },
+        ];
+        $("cards").innerHTML = cards.map((c) =>
+          `<div class="card-stat"><span class="k">${c.k}</span>` +
+          `<span class="v ${c.cls || ""}">${esc(c.v)}</span>` +
+          (c.sub ? `<span class="sub">${esc(c.sub)}</span>` : "") + `</div>`).join("");
+      }
+
+      function renderBars(elId, items) {
+        const el = $(elId);
+        if (!items || !items.length) { el.innerHTML = `<div class="empty-note">No transactions.</div>`; return; }
+        const max = Math.max.apply(null, items.map((i) => Math.abs(i.total))) || 1;
+        el.innerHTML = items.map((i) => {
+          const neg = i.total < 0;
+          const w = Math.max(2, Math.round((Math.abs(i.total) / max) * 100));
+          return `<div class="bar-row">` +
+            `<span class="bar-label">${esc(i.label)}</span>` +
+            `<span class="bar-amt ${neg ? "neg" : ""}">${esc(xof(i.total))}</span>` +
+            `<span class="bar-track"><span class="bar-fill ${neg ? "neg" : ""}" style="width:${w}%"></span></span>` +
+            `<span class="bar-count">${i.count} transaction${i.count === 1 ? "" : "s"}</span>` +
+            `</div>`;
+        }).join("");
+      }
+
+      function renderLocations(locs) {
+        const el = $("locations");
+        if (!locs || !locs.length) { el.innerHTML = `<div class="empty-note">No transactions have a saved location yet.</div>`; return; }
+        el.innerHTML = `<div class="loc-list">` + locs.map((l) => {
+          const acc = l.accuracy != null ? ` · ±${l.accuracy} m` : "";
+          const ll = `${l.lat.toFixed(6)}, ${l.lon.toFixed(6)}`;
+          return `<div class="loc-item">` +
+            `<span class="who">${esc(l.beneficiary || "(no name)")}</span>` +
+            `<span class="amt">${esc(xof(l.amount))}</span>` +
+            `<span class="ll"><a href="https://www.google.com/maps?q=${l.lat},${l.lon}" target="_blank" rel="noopener">${esc(ll)}</a>${esc(acc)} · ${esc(fmtDate(l.recorded_at))}</span>` +
+            `</div>`;
+        }).join("") + `</div>`;
+      }
+
+      function accountOptions(selected) {
+        const codes = Object.keys(DATA.accountCodes).sort();
+        return `<option value="">(none)</option>` + codes.map((c) =>
+          `<option value="${c}" ${c === selected ? "selected" : ""}>${esc(c + "  " + DATA.accountCodes[c])}</option>`).join("");
+      }
+      function methodOptions(selected) {
+        return ["cash", "wave", "orange"].map((m) =>
+          `<option value="${m}" ${m === selected ? "selected" : ""}>${METHOD_LABELS[m]}</option>`).join("");
+      }
+
+      function txRowHtml(t) {
+        const neg = t.amount < 0;
+        const acct = (t.account_code || "") + (t.account_name ? " " + t.account_name : "");
+        const editable = t.source === "recorded";
+        return `<tr data-id="${esc(t.transaction_id)}">` +
+          `<td>${esc(fmtDate(t.recorded_at))}</td>` +
+          `<td>${esc(t.beneficiary || "")}</td>` +
+          `<td>${esc(acct.trim() || "—")}</td>` +
+          `<td>${esc(t.description || "")}</td>` +
+          `<td>${esc(METHOD_LABELS[t.method] || t.method || "")}</td>` +
+          `<td class="num ${neg ? "neg" : ""}">${esc(xof(t.amount))}</td>` +
+          `<td><span class="src-tag ${t.source}">${t.source === "pending" ? "In review" : "Recorded"}</span></td>` +
+          `<td><div class="row-actions">` +
+          (editable ? `<button type="button" class="mini-btn" data-edit="${esc(t.transaction_id)}">Edit</button>`
+                    : `<span class="bar-count">on review screen</span>`) +
+          `</div></td></tr>`;
+      }
+
+      function editRowHtml(t) {
+        return `<tr data-id="${esc(t.transaction_id)}" class="editing">` +
+          `<td><input type="text" id="e_date" value="${esc(t.recorded_at || "")}"></td>` +
+          `<td><input type="text" id="e_ben" value="${esc(t.beneficiary || "")}"></td>` +
+          `<td><select id="e_acc">${accountOptions(t.account_code || "")}</select></td>` +
+          `<td><input type="text" id="e_desc" value="${esc(t.description || "")}"></td>` +
+          `<td><select id="e_method">${methodOptions(t.method || "")}</select></td>` +
+          `<td><input type="text" class="num" id="e_amt" value="${esc(String(t.amount))}"></td>` +
+          `<td><span class="src-tag recorded">Recorded</span></td>` +
+          `<td><div class="row-actions">` +
+          `<button type="button" class="mini-btn primary" data-save="${esc(t.transaction_id)}">Save</button>` +
+          `<button type="button" class="mini-btn" data-cancel="1">Cancel</button>` +
+          `</div></td></tr>`;
+      }
+
+      function renderTable() {
+        const txns = DATA.transactions || [];
+        const head = `<thead><tr><th>Date</th><th>Beneficiary</th><th>Account</th><th>Description</th>` +
+          `<th>Method</th><th class="num">Amount</th><th>Source</th><th>Edit</th></tr></thead>`;
+        if (!txns.length) {
+          $("txTable").innerHTML = head + `<tbody><tr><td colspan="8" class="empty-note" style="padding:18px">No transactions for this mission and period.</td></tr></tbody>`;
+        } else {
+          $("txTable").innerHTML = head + `<tbody>` + txns.map((t) =>
+            (editingId && t.source === "recorded" && t.transaction_id === editingId) ? editRowHtml(t) : txRowHtml(t)).join("") + `</tbody>`;
+        }
+        $("txNote").textContent = DATA.summary.mode === "all"
+          ? "Recorded transactions can be edited here. Transactions still in review are edited on the review screen."
+          : "Showing recorded (database) transactions. Turn on “recorded plus in review” in Settings to include the review queue.";
+        bindTable();
+      }
+
+      function bindTable() {
+        const tbl = $("txTable");
+        tbl.querySelectorAll("[data-edit]").forEach((b) =>
+          b.addEventListener("click", () => { editingId = b.dataset.edit; renderTable(); }));
+        tbl.querySelectorAll("[data-cancel]").forEach((b) =>
+          b.addEventListener("click", () => { editingId = null; renderTable(); }));
+        tbl.querySelectorAll("[data-save]").forEach((b) =>
+          b.addEventListener("click", () => saveRow(b.dataset.save)));
+      }
+
+      async function saveRow(id) {
+        const amt = parseInt(($("e_amt").value || "").replace(/[^\d-]/g, ""), 10);
+        const payload = {
+          beneficiary: $("e_ben").value.trim(),
+          accountCode: $("e_acc").value,
+          description: $("e_desc").value.trim(),
+          method: $("e_method").value,
+          amount: isNaN(amt) ? 0 : amt,
+          recordedAt: $("e_date").value.trim(),
+        };
+        try {
+          await api(`/api/transaction/${encodeURIComponent(id)}`, {
+            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
+          });
+          editingId = null;
+          toast("Saved", "ok");
+          await load();
+        } catch (e) { toast("Save failed", "err"); }
+      }
+
+      function render() {
+        const s = DATA.summary;
+        $("missionPill").textContent = titleCase(s.mission);
+        $("missionPill").className = "mission-pill " + (MISSIONS.indexOf(s.mission) !== -1 ? s.mission : "east");
+        $("periodBadge").textContent = "WF " + s.period;
+        $("modeNote").textContent = s.mode === "all" ? "Counting recorded + in-review transactions" : "Counting recorded transactions only";
+        document.title = "Working Fund: " + titleCase(s.mission) + " WF" + s.period;
+        renderCards(s);
+        renderBars("byAccount", DATA.byAccount);
+        renderBars("byMethod", DATA.byMethod);
+        renderBars("byBeneficiary", DATA.byBeneficiary);
+        renderBars("byDate", DATA.byDate);
+        renderLocations(DATA.locations);
+        renderTable();
+      }
+
+      async function load() {
+        try {
+          DATA = await api(`/api/dashboard?mission=${encodeURIComponent(MISSION)}&period=${encodeURIComponent(PERIOD)}`);
+          render();
+        } catch (e) {
+          document.querySelector("main.dash").insertAdjacentHTML("beforeend", `<div class="loading">Could not load the dashboard.</div>`);
+        }
+      }
+
+      $("refreshBtn").addEventListener("click", () => { editingId = null; load(); });
+      load();
+    })();
+  </script>
+</body>
+
+</html>
