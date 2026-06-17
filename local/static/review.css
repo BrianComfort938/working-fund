@@ -306,6 +306,7 @@ a.loc-link:hover { text-decoration: underline; }
 .btn:active { background: var(--border); }
 .btn kbd { font-size: 10.5px; opacity: .85; }
 .btn.approve { background: var(--ok); border-color: #266b2a; color: #fff; flex: 2; }
+.btn.approve-noprint { background: var(--panel-alt); border-color: #266b2a; color: var(--ok); }
 .btn.skip { background: var(--panel-alt); }
 .btn.delete { background: var(--panel); border-color: var(--danger); color: var(--danger); }
 .btn.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
