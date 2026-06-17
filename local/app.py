@@ -294,7 +294,14 @@ def api_approve(tx_id):
         t["receiptImage"] = ""
     if "second" in exclude:
         t["secondReceiptImage"] = ""
-    printed = printing.print_html_async(_render_record_html(t, auto_print=False), tag="record")
+    # The reviewer can record a transaction without sending it to the printer
+    # (Shift+Enter / "Approve, no print"). The database writes above still run;
+    # we only skip the printer output and the client-side print-tab fallback.
+    no_print = bool(data.get("noPrint"))
+    if no_print:
+        printed = True  # nothing was printed, but suppress the print-tab fallback
+    else:
+        printed = printing.print_html_async(_render_record_html(t, auto_print=False), tag="record")
     if rollover:
         batch_html = _render_csv_batch_html(rollover, auto_print=False)
         if batch_html:
@@ -302,7 +309,7 @@ def api_approve(tx_id):
             # it to the printer if this machine can. Either may be unavailable;
             # the CSV in printed-batches/ is the durable copy regardless.
             printing.save_pdf_async(batch_html, storage.batch_pdf_path(rollover), tag="csvbatch")
-            if printing.print_html_async(batch_html, tag="csvbatch"):
+            if no_print or printing.print_html_async(batch_html, tag="csvbatch"):
                 rollover = None
     _remember_handled(t)
     try:

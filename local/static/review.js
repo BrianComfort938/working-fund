@@ -78,6 +78,17 @@
     state.cloud = s.cloud;
     state.counts = s.counts || { east: 0, south: 0 };
     $("period").value = s.period;
+    // The server keeps the fund period only in memory (it resets to 000 when the
+    // review app restarts), so persist it in this browser and push the saved
+    // value back on load — same approach as the mission below.
+    const savedPeriod = localStorage.getItem("workingfund_period");
+    if (savedPeriod && savedPeriod !== s.period) {
+      try {
+        const pr = await api("/api/period", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ period: savedPeriod }) });
+        state.period = pr.period; $("period").value = pr.period;
+      } catch (_) {}
+    }
+    localStorage.setItem("workingfund_period", state.period);
     const saved = localStorage.getItem("workingfund_mission");
     let wanted = MISSIONS.indexOf(saved) !== -1 ? saved : s.mission;
     if (!state.counts[wanted] && state.counts[wanted === "east" ? "south" : "east"]) {
@@ -385,8 +396,9 @@
     const hasMedia = !!media;
     if (!media) media = `<div class="receipts-empty">No receipts or signature attached</div>`;
 
-    t.beneficiary = sentenceCase(t.beneficiary);
-    t.description = sentenceCase(t.description);
+    // Keep the beneficiary and description exactly as submitted from the portal.
+    // (The compact timeline cards still sentence-case for a tidy glance, but the
+    // editable fields and the saved record must preserve the original casing.)
 
     wrap.innerHTML = `
       <div class="rec-field">
@@ -423,6 +435,7 @@
       </div>
       <div class="rec-actions">
         <button type="button" class="btn approve" id="actApprove">Approve &amp; print</button>
+        <button type="button" class="btn approve-noprint" id="actApproveNoPrint" title="Record without printing (Shift+Enter)">Approve, no print</button>
         <button type="button" class="btn skip" id="actSkip">Skip</button>
         <button type="button" class="btn delete" id="actDelete">Delete</button>
       </div>`;
@@ -453,7 +466,8 @@
     markEmpty($("f_ben"), !String(t.beneficiary || "").trim());
     markEmpty($("f_desc"), !String(t.description || "").trim());
     markEmpty($("f_amt"), !$("f_amt").value.trim());
-    $("actApprove").addEventListener("click", approve);
+    $("actApprove").addEventListener("click", () => approve());
+    $("actApproveNoPrint").addEventListener("click", () => approve({ noPrint: true }));
     $("actSkip").addEventListener("click", skip);
     $("actDelete").addEventListener("click", askDelete);
 
@@ -527,15 +541,16 @@
     return { beneficiary: t.beneficiary, mission: t.mission, accountCode: t.accountCode, accountName: t.accountName, description: t.description, amount: t.amount, method: t.method };
   }
 
-  async function approve() {
+  async function approve(opts) {
+    const noPrint = !!(opts && opts.noPrint);
     const t = cur();
     if (!t) return;
     const excludeReceipts = t.excluded ? Object.keys(t.excluded).filter((k) => t.excluded[k]) : [];
     try {
-      const res = await api(`/api/approve/${t.id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(Object.assign({}, editPayload(t), { excludeReceipts })) });
-      if (!res.printed) window.open(`/print/${t.id}`, "_blank");
+      const res = await api(`/api/approve/${t.id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(Object.assign({}, editPayload(t), { excludeReceipts, noPrint })) });
+      if (!noPrint && !res.printed) window.open(`/print/${t.id}`, "_blank");
       if (res.rollover) { toast("CSV hit 100 lines, printing backup sheet", "ok"); window.open(`/print/csv-batch/${res.rollover}`, "_blank"); }
-      else toast(res.printed ? "Approved & printed" : "Approved & printing", "ok");
+      else toast(noPrint ? "Approved, not printed" : (res.printed ? "Approved & printed" : "Approved & printing"), "ok");
       pushHist(HKEY_COMMITTED, snapshot(t));
       removeCurrent(true);
     } catch (e) { toast("Approve failed", "err"); }
@@ -676,6 +691,7 @@
     try {
       const res = await api("/api/period", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ period: $("period").value }) });
       state.period = res.period; $("period").value = res.period;
+      localStorage.setItem("workingfund_period", res.period);
       const pb = $("periodBadge"); if (pb) pb.textContent = "WF " + res.period;
       toast("Fund period " + res.period, "ok");
     } catch (e) { toast("Invalid period (000-999)", "err"); $("period").value = state.period; }
@@ -754,6 +770,7 @@
     { code: "r", label: "R", el: () => document.querySelectorAll(".receipt-toggle")[0] },
     { code: "t", label: "T", el: () => document.querySelectorAll(".receipt-toggle")[1] },
     { code: "p", label: "P", el: () => $("actApprove") },
+    { code: "o", label: "O", el: () => $("actApproveNoPrint") },
     { code: "k", label: "K", el: () => $("actSkip") },
     { code: "x", label: "X", el: () => $("actDelete") },
     { code: "arrowleft", label: "←", el: () => $("prevBtn") },
@@ -843,7 +860,7 @@
     const inField = /^(INPUT|TEXTAREA|SELECT)$/.test(tag);
     if (e.key === "Enter") {
       if (tag === "TEXTAREA") return;
-      e.preventDefault(); approve(); return;
+      e.preventDefault(); approve({ noPrint: e.shiftKey }); return;
     }
     if (inField) { if (e.key === "Escape") e.target.blur(); return; }
     switch (e.key) {

@@ -264,7 +264,7 @@
   }
   function applyPreset(p) {
     if (p.accountCode && ACCOUNT_CODES[p.accountCode]) setAccount(p.accountCode);
-    $("description").value = p.label;
+    $("description").value = p.description || "";
     if (p.amount) setAmount(p.amount); else setAmount(0);
     if (p.method) selectMethod(p.method);
     toast("Applied: " + p.label, "ok");
@@ -459,13 +459,17 @@
   }
 
   async function loadWaveBalance() {
-    const base = apiBase();
+    // The Wave balance is a per-device value (see Settings): the number this
+    // device last saw must survive a page refresh, so a locally saved balance
+    // always wins. Only ask the server when this device has never stored one.
+    const localRaw = localStorage.getItem(balanceKey());
+    if (localRaw != null && localRaw !== "") { renderWaveBalance(parseInt(localRaw, 10)); return; }
     let val = null;
+    const base = apiBase();
     if (base) {
       try { const r = await fetch(base + "/balance?mission=" + encodeURIComponent(mission)); if (r.ok) { val = (await r.json()).wave; } }
       catch (_) {}
     }
-    if (val == null) { const local = localStorage.getItem(balanceKey()); val = local == null ? null : parseInt(local, 10); }
     renderWaveBalance(val);
   }
   function renderWaveBalance(val) {
