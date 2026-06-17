@@ -230,16 +230,24 @@ def api_get_settings():
     return jsonify({
         "mysql": settings.mysql_config(),
         "mysqlDriver": mysql_ledger.driver_available(),
+        "balanceMode": settings.balance_mode(),
     })
 
 
 @app.route("/api/settings", methods=["POST"])
 def api_save_settings():
-    mysql = (request.json or {}).get("mysql") or {}
-    table = mysql.get("MYSQL_TABLE")
-    if table not in (None, "") and not settings.valid_table_name(table):
-        return jsonify({"error": "Table name may contain only letters, numbers, and underscores."}), 400
-    return jsonify({"ok": True, "mysql": settings.update(mysql)})
+    data = request.json or {}
+    if "balanceMode" in data:
+        settings.set_balance_mode(data.get("balanceMode"))
+    mysql = data.get("mysql")
+    if mysql is not None:
+        table = mysql.get("MYSQL_TABLE")
+        if table not in (None, "") and not settings.valid_table_name(table):
+            return jsonify({"error": "Table name may contain only letters, numbers, and underscores."}), 400
+        mysql_out = settings.update(mysql)
+    else:
+        mysql_out = settings.mysql_config()
+    return jsonify({"ok": True, "mysql": mysql_out, "balanceMode": settings.balance_mode()})
 
 
 @app.route("/api/settings/test-mysql", methods=["POST"])
@@ -357,6 +365,164 @@ def api_restore():
         STATE["all"].insert(0, tx)
     return jsonify({"ok": True, "counts": _mission_counts(),
                     "mission": STATE["mission"], "queue": [_light(t) for t in _visible()]})
+
+
+# --- Working fund + dashboard ----------------------------------------------
+# The fund balance = starting amount (per mission+period) minus every
+# transaction. "recorded" mode counts only what is written to the DB; "all" also
+# counts transactions still sitting in the review queue (cloud, not yet logged).
+
+DASH_METHOD_LABELS = {"cash": "Cash", "wave": "Wave", "orange": "Orange Money"}
+
+
+def _arg_mission():
+    m = request.args.get("mission") or STATE["mission"]
+    return m if m in MISSIONS else STATE["mission"]
+
+
+def _pending_for(mission):
+    return [t for t in STATE["all"] if t["mission"] == mission]
+
+
+def _fund_summary(mission, period):
+    mode = settings.balance_mode()
+    recorded = storage.list_transactions(mission=mission, period=period)
+    recorded_total = sum(int(r.get("amount") or 0) for r in recorded)
+    pending = _pending_for(mission)
+    pending_total = sum(int(t.get("amount") or 0) for t in pending)
+    start = settings.fund_start(mission, period)
+    spent = recorded_total + pending_total if mode == "all" else recorded_total
+    return {
+        "mission": mission, "period": period, "mode": mode, "currency": "XOF",
+        "start": start,
+        "recordedTotal": recorded_total, "recordedCount": len(recorded),
+        "pendingTotal": pending_total, "pendingCount": len(pending),
+        "spent": spent, "remaining": start - spent,
+    }
+
+
+def _dashboard_transactions(mission, period):
+    txns = []
+    for r in storage.list_transactions(mission=mission, period=period):
+        d = dict(r)
+        d["source"] = "recorded"
+        txns.append(d)
+    if settings.balance_mode() == "all":
+        for t in _pending_for(mission):
+            txns.append({
+                "transaction_id": t["id"], "recorded_at": t.get("recordedAt", ""),
+                "mission": t["mission"], "fund_period": period,
+                "beneficiary": t.get("beneficiary", ""), "account_code": t.get("accountCode", ""),
+                "account_name": t.get("accountName", ""), "description": t.get("description", ""),
+                "amount": int(t.get("amount", 0) or 0), "currency": t.get("currency", "XOF"),
+                "method": t.get("method", ""), "location": t.get("location"),
+                "source": "pending",
+            })
+    return txns
+
+
+@app.route("/api/fund")
+def api_fund():
+    return jsonify(_fund_summary(_arg_mission(), request.args.get("period") or STATE["period"]))
+
+
+@app.route("/api/fund", methods=["POST"])
+def api_set_fund():
+    data = request.json or {}
+    mission = data.get("mission") if data.get("mission") in MISSIONS else STATE["mission"]
+    period = data.get("period") or STATE["period"]
+    if "start" in data:
+        try:
+            settings.set_fund_start(mission, period, int(data.get("start") or 0))
+        except (TypeError, ValueError):
+            return jsonify({"error": "start must be a number"}), 400
+    if "mode" in data:
+        settings.set_balance_mode(data.get("mode"))
+    return jsonify(_fund_summary(mission, period))
+
+
+@app.route("/api/dashboard")
+def api_dashboard():
+    mission = _arg_mission()
+    period = request.args.get("period") or STATE["period"]
+    txns = _dashboard_transactions(mission, period)
+
+    def bucket(key_fn):
+        agg = {}
+        for r in txns:
+            k = (key_fn(r) or "").strip()
+            b = agg.setdefault(k, {"key": k, "total": 0, "count": 0})
+            b["total"] += int(r.get("amount") or 0)
+            b["count"] += 1
+        return agg
+
+    by_account = sorted(bucket(lambda r: r.get("account_code")).values(),
+                        key=lambda x: abs(x["total"]), reverse=True)
+    for b in by_account:
+        b["label"] = (b["key"] + " " + ACCOUNT_CODES.get(b["key"], "")).strip() or "(none)"
+    by_method = sorted(bucket(lambda r: r.get("method")).values(),
+                       key=lambda x: abs(x["total"]), reverse=True)
+    for b in by_method:
+        b["label"] = DASH_METHOD_LABELS.get(b["key"], b["key"] or "(none)")
+    by_beneficiary = sorted(bucket(lambda r: r.get("beneficiary")).values(),
+                            key=lambda x: abs(x["total"]), reverse=True)
+    for b in by_beneficiary:
+        b["label"] = b["key"] or "(none)"
+    by_date = sorted(bucket(lambda r: str(r.get("recorded_at") or "")[:10]).values(),
+                     key=lambda x: x["key"])
+    for b in by_date:
+        b["label"] = b["key"] or "(no date)"
+
+    locations = []
+    for r in txns:
+        loc = r.get("location")
+        if isinstance(loc, dict) and isinstance(loc.get("lat"), (int, float)) and isinstance(loc.get("lon"), (int, float)):
+            locations.append({
+                "lat": loc["lat"], "lon": loc["lon"], "accuracy": loc.get("accuracy"),
+                "beneficiary": r.get("beneficiary", ""), "amount": int(r.get("amount") or 0),
+                "recorded_at": r.get("recorded_at", ""), "source": r.get("source", ""),
+            })
+
+    return jsonify({
+        "summary": _fund_summary(mission, period),
+        "transactions": txns,
+        "byAccount": by_account, "byMethod": by_method,
+        "byBeneficiary": by_beneficiary, "byDate": by_date,
+        "locations": locations,
+        "accountCodes": ACCOUNT_CODES,
+    })
+
+
+@app.route("/api/transaction/<tx_id>", methods=["POST"])
+def api_update_transaction(tx_id):
+    data = request.json or {}
+    fields = {}
+    if "beneficiary" in data:
+        fields["beneficiary"] = data["beneficiary"]
+    if "description" in data:
+        fields["description"] = data["description"]
+    if "method" in data:
+        fields["method"] = data["method"]
+    if data.get("mission") in MISSIONS:
+        fields["mission"] = data["mission"]
+    if "recordedAt" in data:
+        fields["recorded_at"] = data["recordedAt"]
+    if "accountCode" in data:
+        fields["account_code"] = data["accountCode"]
+        if data["accountCode"] in ACCOUNT_CODES:
+            fields["account_name"] = ACCOUNT_CODES[data["accountCode"]]
+    if "amount" in data:
+        fields["amount"] = data["amount"]
+    if not storage.update_transaction(tx_id, fields):
+        return jsonify({"error": "nothing to update"}), 400
+    return jsonify({"ok": True})
+
+
+@app.route("/dashboard")
+def dashboard():
+    mission = _arg_mission()
+    period = request.args.get("period") or STATE["period"]
+    return render_template("dashboard.html", mission=mission, period=period)
 
 
 def _render_record_html(t, auto_print):

@@ -32,8 +32,13 @@ def init_db():
             recorded_at TEXT, mission TEXT, fund_period TEXT, beneficiary TEXT,
             account_code TEXT, account_name TEXT, description TEXT,
             amount INTEGER, currency TEXT, method TEXT,
-            signed INTEGER, transaction_id TEXT, logged_at TEXT)"""
+            signed INTEGER, transaction_id TEXT, logged_at TEXT, location TEXT)"""
     )
+    # Databases created before the dashboard predate the location column; add it
+    # in place so the working-fund map can plot recorded transactions too.
+    cols = [r[1] for r in con.execute("PRAGMA table_info(transactions)")]
+    if "location" not in cols:
+        con.execute("ALTER TABLE transactions ADD COLUMN location TEXT")
     con.commit()
     con.close()
 
@@ -58,16 +63,18 @@ def _row_from_tx(tx, fund_period):
 def write_sqlite(tx, fund_period):
     init_db()
     row = _row_from_tx(tx, fund_period)
+    loc = tx.get("location")
+    loc_json = json.dumps(loc, separators=(",", ":")) if loc else None
     con = sqlite3.connect(DB_PATH)
     con.execute(
         """INSERT INTO transactions
            (recorded_at,mission,fund_period,beneficiary,account_code,account_name,
-            description,amount,currency,method,signed,transaction_id,logged_at)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            description,amount,currency,method,signed,transaction_id,logged_at,location)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (row["recorded_at"], row["mission"], row["fund_period"], row["beneficiary"],
          row["account_code"], row["account_name"], row["description"], row["amount"],
          row["currency"], row["method"], row["signed"], row["transaction_id"],
-         datetime.now().isoformat()),
+         datetime.now().isoformat(), loc_json),
     )
     con.commit()
     con.close()
@@ -275,6 +282,91 @@ def find_similar(beneficiary, amount, exclude_id="", limit=8, amount_tolerance=0
         if len(out) >= max(1, int(limit)):
             break
     return out
+
+
+def list_transactions(mission=None, period=None):
+    """Recorded transactions from SQLite, newest first, optionally filtered by
+    mission and fund period. `location` is parsed back into a dict (or None)."""
+    out = []
+    try:
+        con = sqlite3.connect(DB_PATH)
+        con.row_factory = sqlite3.Row
+        cols = [r[1] for r in con.execute("PRAGMA table_info(transactions)")]
+        sel = ("recorded_at, mission, fund_period, beneficiary, account_code, "
+               "account_name, description, amount, currency, method, signed, transaction_id"
+               + (", location" if "location" in cols else ""))
+        q = f"SELECT {sel} FROM transactions"
+        conds, params = [], []
+        if mission:
+            conds.append("mission=?"); params.append(mission)
+        if period is not None and period != "":
+            conds.append("fund_period=?"); params.append(period)
+        if conds:
+            q += " WHERE " + " AND ".join(conds)
+        q += " ORDER BY recorded_at DESC, id DESC"
+        for r in con.execute(q, params):
+            d = dict(r)
+            if d.get("location"):
+                try:
+                    d["location"] = json.loads(d["location"])
+                except Exception:
+                    d["location"] = None
+            else:
+                d["location"] = None
+            out.append(d)
+        con.close()
+    except Exception:
+        pass
+    return out
+
+
+# Columns the dashboard is allowed to edit. Names are a fixed whitelist so they
+# can be interpolated into the UPDATE statement safely (values stay parameterized).
+_EDITABLE_TEXT = ("beneficiary", "account_code", "account_name", "description",
+                  "method", "mission", "recorded_at", "fund_period")
+
+
+def update_transaction(tx_id, fields):
+    """Edit a recorded transaction in SQLite and the CSV backup. Returns True if
+    anything changed. The MySQL mirror is append-only and is not updated here."""
+    if not tx_id or not isinstance(fields, dict):
+        return False
+    sets = {}
+    for k in _EDITABLE_TEXT:
+        if fields.get(k) is not None:
+            sets[k] = str(fields[k])
+    if "amount" in fields:
+        try:
+            sets["amount"] = int(fields["amount"])
+        except (TypeError, ValueError):
+            pass
+    if not sets:
+        return False
+
+    try:
+        con = sqlite3.connect(DB_PATH)
+        assignments = ", ".join(f"{k}=?" for k in sets)
+        con.execute(f"UPDATE transactions SET {assignments} WHERE transaction_id=?",
+                    (*sets.values(), tx_id))
+        con.commit()
+        con.close()
+    except Exception:
+        pass
+
+    rows = _read_csv_rows()
+    changed = False
+    for r in rows:
+        if r.get("transaction_id") == tx_id:
+            for k, v in sets.items():
+                if k in r:
+                    r[k] = v
+            changed = True
+    if changed:
+        with open(CSV_PATH, "w", newline="", encoding="utf-8") as f:
+            w = csv.DictWriter(f, fieldnames=CSV_FIELDS)
+            w.writeheader()
+            w.writerows(rows)
+    return True
 
 
 def save_signature(tx_id, sig):
