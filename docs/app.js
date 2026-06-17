@@ -72,6 +72,8 @@
   let receiptImage = "";
   let secondImage = "";
   let signature = null;
+  let signatureIsDefault = false;
+  let openSignaturePad = function () {}; // assigned by wireSignature()
   let mission = "";
   let lastPosition = null;
   let geoWatchId = null;
@@ -326,6 +328,131 @@
   }
   function hashStr(s) { let h = 0; for (let i = 0; i < s.length; i++) { h = (h << 5) - h + s.charCodeAt(i); h |= 0; } return h; }
 
+  // --- Default signatures -----------------------------------------------------
+  // A small per-device library of { id, name, sig } stored in localStorage as
+  // JSON (signatures are tiny vector strokes, never sent to the cloud as a
+  // library). When a transaction's beneficiary matches a saved name and the user
+  // has not drawn a signature, the matching one is applied automatically.
+  const SIGS_KEY = "workingfund_signatures";
+  const normName = (s) => String(s == null ? "" : s).trim().toLowerCase();
+  function loadSignatures() { try { return JSON.parse(localStorage.getItem(SIGS_KEY) || "[]"); } catch (_) { return []; } }
+  function saveSignatures(arr) { localStorage.setItem(SIGS_KEY, JSON.stringify(arr)); }
+  function findDefaultSignature(name) {
+    const key = normName(name);
+    if (!key) return null;
+    return loadSignatures().find((x) => normName(x.name) === key) || null;
+  }
+  function maybeApplyDefaultSignature() {
+    // Never override a signature the user drew themselves.
+    if (signature && !signatureIsDefault) return;
+    const match = findDefaultSignature($("beneficiary").value);
+    if (match && match.sig) {
+      signature = match.sig; signatureIsDefault = true;
+    } else if (signatureIsDefault) {
+      // A default was auto-applied but the name no longer matches: clear it.
+      signature = null; signatureIsDefault = false;
+    }
+    renderSignaturePreview();
+  }
+
+  let editingSigId = null;
+  let pendingSig = null; // signature being composed in the library form
+
+  function renderSigFormPreview() {
+    const wrap = $("sigLibPreview");
+    if (!pendingSig) {
+      wrap.classList.add("empty");
+      wrap.innerHTML = `<span class="sig-empty-text">No signature</span>`;
+      $("sigLibRemove").classList.add("hidden");
+      $("sigLibCollect").textContent = "Collect signature";
+      return;
+    }
+    wrap.classList.remove("empty");
+    const w = wrap.clientWidth || 320, h = 80;
+    const c = document.createElement("canvas"); c.width = w; c.height = h;
+    drawSignature(c, pendingSig, 6);
+    wrap.innerHTML = ""; c.style.width = w + "px"; c.style.height = h + "px";
+    wrap.appendChild(c);
+    $("sigLibRemove").classList.remove("hidden");
+    $("sigLibCollect").textContent = "Re-collect";
+  }
+  function resetSigForm() {
+    editingSigId = null; pendingSig = null;
+    $("sigLibName").value = "";
+    $("sigLibSave").textContent = "Save signature";
+    $("sigLibCancelEdit").classList.add("hidden");
+    renderSigFormPreview();
+  }
+  function startEditSig(id) {
+    const s = loadSignatures().find((x) => x.id === id);
+    if (!s) return;
+    editingSigId = id; pendingSig = s.sig || null;
+    $("sigLibName").value = s.name || "";
+    $("sigLibSave").textContent = "Update signature";
+    $("sigLibCancelEdit").classList.remove("hidden");
+    renderSigFormPreview();
+    $("sigLibName").focus();
+  }
+  function renderSigLibList() {
+    const wrap = $("sigLibList");
+    const sigs = loadSignatures();
+    if (!sigs.length) { wrap.innerHTML = `<div class="hint">No default signatures yet.</div>`; return; }
+    wrap.innerHTML = sigs.map((s) => {
+      const strokes = s.sig && s.sig.s ? s.sig.s.length : 0;
+      return `<div class="sig-lib-row">` +
+        `<div class="pm-text"><strong>${escapeHtml(s.name)}</strong>` +
+        `<span class="pm-sub">${strokes} stroke${strokes === 1 ? "" : "s"}</span></div>` +
+        `<canvas class="sig-mini" width="96" height="38" data-mini="${s.id}"></canvas>` +
+        `<button type="button" class="link-btn" data-edit="${s.id}">Edit</button>` +
+        `<button type="button" class="link-btn danger" data-del="${s.id}">Delete</button>` +
+        `</div>`;
+    }).join("");
+    sigs.forEach((s) => { const c = wrap.querySelector(`[data-mini="${s.id}"]`); if (c && s.sig) drawSignature(c, s.sig, 4); });
+    wrap.querySelectorAll("[data-edit]").forEach((b) =>
+      b.addEventListener("click", () => startEditSig(b.dataset.edit)));
+    wrap.querySelectorAll("[data-del]").forEach((b) =>
+      b.addEventListener("click", () => {
+        saveSignatures(loadSignatures().filter((x) => x.id !== b.dataset.del));
+        if (editingSigId === b.dataset.del) resetSigForm();
+        renderSigLibList();
+        maybeApplyDefaultSignature();
+        toast("Signature deleted", "ok");
+      }));
+  }
+  function openSigLib() {
+    resetSigForm();
+    renderSigLibList();
+    $("sigLibModal").classList.remove("hidden");
+    setTimeout(() => $("sigLibName").focus(), 30);
+  }
+  function wireSigLib() {
+    $("openSigLib").addEventListener("click", openSigLib);
+    $("sigLibClose").addEventListener("click", () => $("sigLibModal").classList.add("hidden"));
+    $("sigLibCancelEdit").addEventListener("click", resetSigForm);
+    $("sigLibCollect").addEventListener("click", () =>
+      openSignaturePad(pendingSig, (sig) => { pendingSig = sig; renderSigFormPreview(); }));
+    $("sigLibRemove").addEventListener("click", () => { pendingSig = null; renderSigFormPreview(); });
+    $("sigLibSave").addEventListener("click", () => {
+      const name = $("sigLibName").value.trim();
+      if (!name) { toast("Enter a name", "err"); return; }
+      if (!pendingSig) { toast("Collect a signature first", "err"); return; }
+      const arr = loadSignatures();
+      const clash = arr.find((x) => normName(x.name) === normName(name) && x.id !== editingSigId);
+      if (clash) { toast("A signature for that name already exists", "err"); return; }
+      if (editingSigId) {
+        const i = arr.findIndex((x) => x.id === editingSigId);
+        if (i !== -1) arr[i] = { id: editingSigId, name, sig: pendingSig };
+      } else {
+        arr.push({ id: "s_" + Math.abs(hashStr(name + ":" + Date.now())).toString(36), name, sig: pendingSig });
+      }
+      saveSignatures(arr);
+      toast(editingSigId ? "Signature updated" : "Signature saved", "ok");
+      resetSigForm();
+      renderSigLibList();
+      maybeApplyDefaultSignature();
+    });
+  }
+
   function compressImage(file, maxDim, quality) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -389,11 +516,13 @@
   }
   function renderSignaturePreview() {
     const wrap = $("sigPreview");
+    const note = $("sigDefaultNote");
     if (!signature) {
       wrap.classList.add("empty");
       wrap.innerHTML = `<span class="sig-empty-text">No signature collected</span>`;
       $("removeSigBtn").classList.add("hidden");
       $("collectSigBtn").textContent = "Collect signature";
+      if (note) note.classList.add("hidden");
       return;
     }
     wrap.classList.remove("empty");
@@ -405,12 +534,14 @@
     wrap.appendChild(lc);
     $("removeSigBtn").classList.remove("hidden");
     $("collectSigBtn").textContent = "Re-collect";
+    if (note) note.classList.toggle("hidden", !signatureIsDefault);
   }
   function wireSignature() {
     const modal = $("sigModal");
     const canvas = $("sigCanvas");
     const ctx = canvas.getContext("2d");
     let strokes = [], current = null, drawing = false, lastX = 0, lastY = 0;
+    let onSaveCb = null;
 
     function sizeCanvas() {
       const wrap = $("sigCanvasWrap");
@@ -442,19 +573,26 @@
     canvas.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
 
-    $("collectSigBtn").addEventListener("click", () => {
-      strokes = signature ? signature.s.map((a) => a.slice()) : [];
+    // Open the shared pad seeded with `initial`; `onSave` receives the new sig
+    // (or null if nothing was drawn). Used by the transaction signature field and
+    // the default-signatures library.
+    openSignaturePad = function (initial, onSave) {
+      onSaveCb = typeof onSave === "function" ? onSave : null;
+      strokes = initial && initial.s ? initial.s.map((a) => a.slice()) : [];
       modal.classList.remove("hidden");
       requestAnimationFrame(sizeCanvas);
-    });
-    $("removeSigBtn").addEventListener("click", () => { signature = null; renderSignaturePreview(); });
+    };
+
+    $("collectSigBtn").addEventListener("click", () =>
+      openSignaturePad(signature, (sig) => { signature = sig; signatureIsDefault = false; renderSignaturePreview(); }));
+    $("removeSigBtn").addEventListener("click", () => { signature = null; signatureIsDefault = false; renderSignaturePreview(); });
     $("sigClear").addEventListener("click", () => { strokes = []; redraw(); });
     $("sigCancel").addEventListener("click", () => modal.classList.add("hidden"));
     $("sigSave").addEventListener("click", () => {
       const nonEmpty = strokes.filter((s) => s.length >= 2);
-      signature = nonEmpty.length ? { w: canvas._w, h: canvas._h, s: nonEmpty } : null;
-      renderSignaturePreview();
+      const sig = nonEmpty.length ? { w: canvas._w, h: canvas._h, s: nonEmpty } : null;
       modal.classList.add("hidden");
+      if (onSaveCb) onSaveCb(sig);
     });
   }
 
@@ -575,6 +713,7 @@
     $("description").value = e.description || "";
     if (e.amount) { setAmount(e.amount); if (e.sign < 0) { amountSign = -1; renderAmount(); } }
     if (e.method) selectMethod(e.method);
+    maybeApplyDefaultSignature();
     toast("Filled from history", "ok");
   }
   function wireAutocomplete(inputId, panelId) {
@@ -689,7 +828,7 @@
     $("txForm").reset();
     setAccount("");
     amountSign = 1; amountDigits = ""; method = "";
-    receiptImage = ""; secondImage = ""; signature = null;
+    receiptImage = ""; secondImage = ""; signature = null; signatureIsDefault = false;
     renderAmount();
     document.querySelectorAll("#methodRow .seg").forEach((x) => x.setAttribute("aria-pressed", "false"));
     ["receiptPreview", "secondPreview"].forEach((id) => { $(id).innerHTML = ""; $(id).classList.add("hidden"); });
@@ -701,6 +840,10 @@
       e.preventDefault();
       const err = validate();
       if (err) { toast(err, "err"); return; }
+      if (!signature) {
+        const d = findDefaultSignature($("beneficiary").value);
+        if (d && d.sig) { signature = d.sig; signatureIsDefault = true; }
+      }
       const tx = {
         mission, beneficiary: $("beneficiary").value.trim(),
         accountCode: selectedAccount, accountName: ACCOUNT_CODES[selectedAccount],
@@ -756,10 +899,12 @@
     wirePhoto([$("receiptCam"), $("receiptGal")], "receiptPreview", (v) => { receiptImage = v; });
     wirePhoto([$("secondCam"), $("secondGal")], "secondPreview", (v) => { secondImage = v; });
     wireSignature();
+    wireSigLib();
     wireWave();
     wireSubmit();
     wireAutocomplete("beneficiary", "benAcPanel");
     wireAutocomplete("description", "descAcPanel");
+    $("beneficiary").addEventListener("input", maybeApplyDefaultSignature);
     renderAmount();
     renderSignaturePreview();
     setMission(currentMission());
