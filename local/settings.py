@@ -176,3 +176,29 @@ def set_fund_start(mission, period, value):
         overlay["WF_START"] = starts
         _persist(overlay)
         return starts[_fund_key(mission, period)]
+
+
+# --- Closed periods ---------------------------------------------------------
+# When a fund period is closed, a snapshot of the accounting (start, expenses,
+# the counted cash and any discrepancy) is appended to a per-mission history so
+# the review portal can show "previous working funds, their dates, values and
+# differences". The newest entry is last. Capped so the overlay stays small.
+
+CLOSURE_CAP = 200
+
+
+def fund_closures(mission):
+    data = get("WF_CLOSURES", {}) or {}
+    return list(data.get(mission, []))
+
+
+def add_fund_closure(mission, record):
+    with _lock:
+        overlay = dict(_load())
+        all_closures = dict(overlay.get("WF_CLOSURES", {}) or {})
+        lst = list(all_closures.get(mission, []))
+        lst.append(record)
+        all_closures[mission] = lst[-CLOSURE_CAP:]
+        overlay["WF_CLOSURES"] = all_closures
+        _persist(overlay)
+        return all_closures[mission]

@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Working Fund Close — {{ mission }} WF {{ period }}</title>
+    <style>
+        /* Zero page margin; the body padding provides the visible margin, so the
+           layout is identical whether printed by the browser, the silent kiosk
+           printer, or rendered to a one-page PDF. */
+        @page { size: A4; margin: 0; }
+
+        * { box-sizing: border-box; }
+        html, body { margin: 0; }
+
+        body {
+            width: 788px;
+            padding: 34px;
+            font-family: Calibri, Arial, sans-serif;
+            color: #1a2228;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .hd {
+            display: flex; justify-content: space-between; align-items: flex-end;
+            border-bottom: 2px solid #2d3c45; padding-bottom: 8px; margin-bottom: 14px;
+        }
+        .hd h1 { font-size: 17px; margin: 0; color: #2d3c45; }
+        .hd .sub { font-size: 11px; color: #00618a; font-weight: 700; margin-top: 2px; }
+        .hd .meta { text-align: right; font-size: 10px; color: #555; line-height: 1.5; }
+
+        .grid { display: flex; gap: 18px; align-items: flex-start; }
+        .col { flex: 1; }
+        h2.sec { font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
+            color: #69757f; margin: 0 0 6px; }
+
+        table { width: 100%; border-collapse: collapse; }
+        .acct th, .acct td {
+            border: 1px solid #b9c0c8; padding: 5px 9px; font-size: 12px; text-align: left;
+        }
+        .acct td.amt, .acct th.amt { text-align: right; font-variant-numeric: tabular-nums; }
+        .acct tr.total td { font-weight: 700; background: #eef2f4; }
+
+        .summary td { padding: 6px 9px; font-size: 13px; border-bottom: 1px solid #e1e6ea; }
+        .summary td.lab { color: #555; }
+        .summary td.val { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+        .summary tr.expected td { border-top: 2px solid #2d3c45; }
+
+        .disc {
+            margin-top: 12px; border-radius: 5px; padding: 10px 14px;
+            display: flex; justify-content: space-between; align-items: baseline;
+        }
+        .disc .lab { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
+        .disc .num { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+        .disc.ok { background: #e7f3ea; color: #1e5b32; border: 1px solid #b6d8c0; }
+        .disc.short { background: #fbe9e7; color: #8f2018; border: 1px solid #e6b3ad; }
+        .disc.over { background: #fdf2e2; color: #8a5a12; border: 1px solid #eccf9c; }
+
+        .hist { margin-top: 22px; }
+        .hist table { border-collapse: collapse; }
+        .hist th, .hist td {
+            border: 1px solid #c6ccd4; padding: 4px 9px; font-size: 11px; text-align: left;
+        }
+        .hist th { background: #e9edf0; color: #2d3c45; text-transform: uppercase;
+            font-size: 9.5px; letter-spacing: .03em; }
+        .hist td.num { text-align: right; font-variant-numeric: tabular-nums; }
+        .hist td.short { color: #8f2018; font-weight: 700; }
+        .hist td.over { color: #8a5a12; font-weight: 700; }
+        .hist .empty { color: #69757f; font-style: italic; }
+
+        .foot { margin-top: 26px; display: flex; gap: 40px; }
+        .foot .sigline { flex: 1; border-top: 1px solid #1a2228; padding-top: 4px;
+            font-size: 10px; color: #555; }
+    </style>
+</head>
+
+<body>
+    <div class="hd">
+        <div>
+            <h1>Working Fund &mdash; Period Close</h1>
+            <div class="sub">{{ mission }} mission &middot; WF {{ period }}</div>
+        </div>
+        <div class="meta">
+            Closed {{ closed_at }}<br>
+            {{ recorded_count }} recorded transaction{{ '' if recorded_count == 1 else 's' }}<br>
+            Amounts in {{ currency }}
+        </div>
+    </div>
+
+    <div class="grid">
+        <div class="col">
+            <h2 class="sec">Cash counted on hand</h2>
+            <table class="acct">
+                <thead>
+                    <tr><th>Denomination</th><th class="amt">Qty</th><th class="amt">Total</th></tr>
+                </thead>
+                <tbody>
+                    {% for d in denom_rows %}
+                    <tr>
+                        <td>{{ d.label }}</td>
+                        <td class="amt">{{ d.qty }}</td>
+                        <td class="amt">{{ "{:,}".format(d.total) }}</td>
+                    </tr>
+                    {% endfor %}
+                    {% if not denom_rows %}
+                    <tr><td colspan="3" style="color:#69757f;font-style:italic">No cash counted.</td></tr>
+                    {% endif %}
+                    <tr class="total">
+                        <td colspan="2">Counted cash</td>
+                        <td class="amt">{{ counted }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="col">
+            <h2 class="sec">Reconciliation</h2>
+            <table class="summary">
+                <tr><td class="lab">Starting amount</td><td class="val">{{ start }}</td></tr>
+                <tr><td class="lab">Less expenses recorded</td><td class="val">{{ spent }}</td></tr>
+                <tr class="expected"><td class="lab">Expected cash remaining</td><td class="val">{{ expected }}</td></tr>
+                <tr><td class="lab">Counted cash on hand</td><td class="val">{{ counted }}</td></tr>
+            </table>
+            <div class="disc {{ disc_state }}">
+                <span class="lab">{{ disc_label }}</span>
+                <span class="num">{{ '0' if disc_raw == 0 else discrepancy }}</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="hist">
+        <h2 class="sec">Previous working fund periods</h2>
+        <table>
+            <thead>
+                <tr><th>Period</th><th>Closed</th><th class="num">Closing cash</th><th class="num">Difference</th></tr>
+            </thead>
+            <tbody>
+                {% for h in history %}
+                <tr>
+                    <td>WF {{ h.period }}</td>
+                    <td>{{ h.closedAt }}</td>
+                    <td class="num">{{ h.counted }}</td>
+                    <td class="num {{ 'short' if h.diff_raw < 0 else ('over' if h.diff_raw > 0 else '') }}">{{ h.diff }}</td>
+                </tr>
+                {% endfor %}
+                {% if not history %}
+                <tr><td colspan="4" class="empty">No earlier periods on record.</td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="foot">
+        <div class="sigline">Counted by</div>
+        <div class="sigline">Approved by</div>
+    </div>
+
+    {% if auto_print %}<script>
+        window.addEventListener('load', function () { setTimeout(function () { window.print(); }, 300); });
+        window.addEventListener('afterprint', function () { window.close(); });
+    </script>{% endif %}
+</body>
+
+</html>

@@ -400,6 +400,59 @@ kbd {
 .hint { font-size: 12.5px; color: var(--muted); margin: 0; }
 .hint.warn { color: #8a5a12; }
 
+/* --- Close working fund period modal -------------------------------------- */
+.close-card { max-width: 620px; }
+.close-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+@media (max-width: 600px) { .close-cols { grid-template-columns: 1fr; } }
+
+.denom-grid { display: flex; flex-direction: column; gap: 4px; }
+.denom-row {
+  display: grid; grid-template-columns: 1fr 78px 1fr; gap: 8px; align-items: center;
+}
+.denom-name { font-family: var(--mono); font-size: 13px; font-weight: 700; }
+.denom-type { font-family: var(--sans); font-size: 10px; font-weight: 600; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .03em; margin-left: 5px; }
+.denom-qty {
+  width: 100%; text-align: right; font-family: var(--mono); font-size: 13px;
+  padding: 5px 8px; border: 1px solid var(--border-strong); border-radius: var(--radius);
+  background: var(--panel); color: var(--text);
+}
+.denom-qty:focus { outline: none; border-color: var(--blue); }
+.denom-line { font-family: var(--mono); font-size: 12.5px; text-align: right; color: var(--muted); }
+.denom-line.has { color: var(--text); font-weight: 700; }
+
+.recon { display: flex; flex-direction: column; gap: 2px; margin-bottom: 12px; }
+.recon-row {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-size: 13px; color: var(--muted); padding: 4px 0; border-bottom: 1px solid var(--panel-alt);
+}
+.recon-row b { font-family: var(--mono); font-weight: 700; color: var(--text); }
+.recon-row.strong { color: var(--text); border-bottom-color: var(--border); }
+.recon-row.strong b { font-size: 15px; }
+
+.disc-box {
+  display: flex; justify-content: space-between; align-items: baseline;
+  border-radius: var(--radius); padding: 9px 13px; border: 1px solid var(--border);
+}
+.disc-lab { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
+.disc-num { font-family: var(--mono); font-size: 18px; font-weight: 700; }
+.disc-box.ok { background: #e7f3ea; color: #1e5b32; border-color: #b6d8c0; }
+.disc-box.short { background: #fbe9e7; color: #8f2018; border-color: #e6b3ad; }
+.disc-box.over { background: #fdf2e2; color: #8a5a12; border-color: #eccf9c; }
+
+.closure-list { display: flex; flex-direction: column; gap: 2px; max-height: 160px; overflow-y: auto; }
+.closure-row {
+  display: grid; grid-template-columns: 64px 1fr auto auto; gap: 10px; align-items: baseline;
+  font-size: 12.5px; padding: 5px 2px; border-bottom: 1px solid var(--panel-alt);
+}
+.cl-period { font-family: var(--mono); font-weight: 700; color: var(--blue); }
+.cl-date { color: var(--muted); }
+.cl-val { font-family: var(--mono); text-align: right; }
+.cl-diff { font-family: var(--mono); text-align: right; min-width: 64px; color: var(--muted); }
+.cl-diff.short { color: var(--danger); font-weight: 700; }
+.cl-diff.over { color: var(--amber); font-weight: 700; }
+.closure-empty { font-size: 12.5px; color: var(--muted); font-style: italic; padding: 4px 0; }
+
 .toast {
   position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
   background: var(--header); border: 1px solid #1c272d; color: #fff;

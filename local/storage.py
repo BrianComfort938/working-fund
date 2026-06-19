@@ -127,6 +127,12 @@ def batch_pdf_path(batch_id):
     return os.path.join(BATCH_DIR, f"batch-{batch_id}.pdf")
 
 
+def close_pdf_path(mission, period, stamp):
+    """One-page PDF backup of a period-close report, kept alongside the batches."""
+    _ensure_dirs()
+    return os.path.join(BATCH_DIR, f"close-{mission}-{period}-{stamp}.pdf")
+
+
 def batch_date_range(rows):
     """Earliest and latest recorded_at in a batch, as raw ISO strings ("" if none).
 

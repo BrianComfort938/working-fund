@@ -12,7 +12,7 @@
   <main id="reviewView">
     <aside class="col-time">
       <div id="timeBanner" class="time-banner"></div>
-      <button type="button" id="fundBox" class="fund-box hidden" title="Open the working-fund dashboard"></button>
+      <button type="button" id="fundBox" class="fund-box hidden" title="Close this working-fund period"></button>
     </aside>
     <section class="col-main">
       <div class="review-nav">
@@ -208,6 +208,40 @@
       <div class="modal-actions">
         <span class="spacer"></span>
         <button id="closeSettings" class="btn primary">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="closeModal" class="modal hidden">
+    <div class="modal-card close-card">
+      <div class="modal-head">
+        <h2>Close working fund &mdash; <span id="closeTitle">East &middot; WF 000</span></h2>
+      </div>
+      <p class="hint">Count the cash on hand to close this period. The total is checked against
+        the expected balance, the accounting is saved to the Excel file and printed, and a new
+        period begins.</p>
+
+      <div class="close-cols">
+        <div class="close-cash">
+          <div class="set-sec-label">Cash count</div>
+          <div class="denom-grid" id="denomGrid"></div>
+        </div>
+        <div class="close-side">
+          <div class="set-sec-label">Reconciliation</div>
+          <div class="recon" id="closeRecon"></div>
+          <div class="disc-box" id="closeDisc"></div>
+        </div>
+      </div>
+
+      <div class="set-section">
+        <div class="set-sec-label">Previous periods</div>
+        <div class="closure-list" id="closureList"></div>
+      </div>
+
+      <div class="modal-actions">
+        <button id="closeCancel" class="btn">Cancel</button>
+        <span class="spacer"></span>
+        <button id="closeContinue" class="btn primary">Continue &amp; print</button>
       </div>
     </div>
   </div>
