@@ -490,7 +490,17 @@ def api_dashboard():
         "byBeneficiary": by_beneficiary, "byDate": by_date,
         "locations": locations,
         "accountCodes": ACCOUNT_CODES,
+        "mysql": {
+            "enabled": mysql_ledger.is_enabled(),
+            "driver": mysql_ledger.driver_available(),
+            "table": mysql_ledger.table_name(),
+        },
     })
+
+
+@app.route("/api/query", methods=["POST"])
+def api_query():
+    return jsonify(mysql_ledger.run_query((request.json or {}).get("sql", "")))
 
 
 @app.route("/api/transaction/<tx_id>", methods=["POST"])

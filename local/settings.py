@@ -157,12 +157,19 @@ def _fund_key(mission, period):
     return f"{mission}:{period}"
 
 
+# A fresh working fund defaults to 7.5M XOF until the user sets it explicitly.
+DEFAULT_FUND_START = 7_500_000
+
+
 def fund_start(mission, period):
     starts = get("WF_START", {}) or {}
-    try:
-        return int(starts.get(_fund_key(mission, period), 0) or 0)
-    except (TypeError, ValueError):
-        return 0
+    key = _fund_key(mission, period)
+    if key in starts:
+        try:
+            return int(starts[key])
+        except (TypeError, ValueError):
+            return DEFAULT_FUND_START
+    return DEFAULT_FUND_START
 
 
 def set_fund_start(mission, period, value):
