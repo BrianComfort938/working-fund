@@ -7,76 +7,105 @@
   <title>Working Fund: Dashboard</title>
   <link rel="stylesheet" href="/static/review.css">
   <style>
-    main.dash { max-width: 1180px; margin: 0 auto; padding: 18px; display: flex; flex-direction: column; gap: 16px; }
-    .dash-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-    .dash-head h1 { margin: 0; font-size: 20px; font-weight: 600; }
-    .dash-head .spacer { flex: 1; }
-    .dash-sub { font-size: 12.5px; color: var(--muted); }
+    body { font-size: 15px; }
+    main.dash { max-width: 1100px; margin: 0 auto; padding: 22px 22px 60px; display: flex; flex-direction: column; gap: 20px; }
 
-    .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .dash-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+    .dash-head h1 { margin: 0; font-size: 22px; font-weight: 600; }
+    .dash-head .spacer { flex: 1; }
+    .dash-sub { font-size: 13px; color: var(--muted); }
+
+    .tabs { display: flex; gap: 4px; border-bottom: 2px solid var(--border); }
+    .tab {
+      cursor: pointer; font-family: inherit; font-size: 14.5px; font-weight: 600; color: var(--muted);
+      background: none; border: none; padding: 11px 18px; border-bottom: 3px solid transparent; margin-bottom: -2px;
+    }
+    .tab:hover { color: var(--text); }
+    .tab[aria-selected="true"] { color: var(--blue); border-bottom-color: var(--blue); }
+
+    .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
     @media (max-width: 820px) { .cards { grid-template-columns: 1fr 1fr; } }
     .card-stat {
       background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
-      padding: 14px; box-shadow: 0 1px 2px rgba(20, 33, 42, .05); display: flex; flex-direction: column; gap: 4px;
+      padding: 16px 18px; box-shadow: 0 1px 2px rgba(20, 33, 42, .05); display: flex; flex-direction: column; gap: 6px;
     }
-    .card-stat .k { font-size: 10.5px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
-    .card-stat .v { font-family: var(--mono); font-size: 22px; font-weight: 700; }
+    .card-stat .k { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+    .card-stat .v { font-family: var(--mono); font-size: 25px; font-weight: 700; line-height: 1.15; }
     .card-stat .v.pos { color: var(--ok); }
     .card-stat .v.neg { color: var(--danger); }
     .card-stat .v.blue { color: var(--blue); }
-    .card-stat .sub { font-size: 11px; color: var(--muted); }
+    .card-stat .sub { font-size: 12px; color: var(--muted); }
+    .card-stat .edit-link { align-self: flex-start; }
+    .start-edit { display: flex; gap: 8px; margin-top: 2px; }
+    .start-edit input { width: 100%; font-family: var(--mono); font-size: 18px; padding: 7px 9px;
+      border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--panel); color: var(--text); }
+    .link-btn { background: none; border: none; color: var(--blue); cursor: pointer; font-size: 12.5px; font-weight: 600; padding: 0; font-family: inherit; }
 
-    .panels { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-    @media (max-width: 820px) { .panels { grid-template-columns: 1fr; } }
     .panel {
       background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
-      padding: 16px; box-shadow: 0 1px 2px rgba(20, 33, 42, .05); min-width: 0;
+      padding: 20px; box-shadow: 0 1px 2px rgba(20, 33, 42, .05); min-width: 0;
     }
-    .panel h2 { margin: 0 0 12px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
-    .bar-row { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; align-items: baseline; margin-bottom: 9px; }
-    .bar-row:last-child { margin-bottom: 0; }
-    .bar-label { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .bar-amt { font-family: var(--mono); font-size: 13px; font-weight: 700; text-align: right; }
-    .bar-amt.neg { color: var(--danger); }
-    .bar-track { grid-column: 1 / -1; height: 6px; background: var(--panel-alt); border-radius: 3px; overflow: hidden; }
-    .bar-fill { height: 100%; background: var(--blue); border-radius: 3px; }
-    .bar-fill.neg { background: var(--amber); }
-    .bar-count { font-size: 10.5px; color: var(--muted); }
-    .empty-note { color: var(--muted); font-size: 13px; }
+    .panel-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+    .panel-head h2 { margin: 0; font-size: 14px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+    .panel-head .spacer { flex: 1; }
+    .ctrl { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--muted); }
+    .ctrl select {
+      font-family: inherit; font-size: 13.5px; padding: 7px 30px 7px 10px; border-radius: var(--radius);
+      border: 1px solid var(--border-strong); background: var(--panel); color: var(--text);
+      appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2369757f' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 9px center; cursor: pointer;
+    }
+    #chartArea { min-height: 280px; display: flex; align-items: center; justify-content: center; }
+    #chartArea svg { max-width: 100%; height: auto; }
+    .empty-note { color: var(--muted); font-size: 14px; padding: 30px 0; }
 
-    .loc-list { display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow: auto; }
-    .loc-item {
-      display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: baseline;
-      padding: 8px 0; border-top: 1px solid var(--border);
-    }
+    .pie-wrap { display: flex; gap: 24px; align-items: center; flex-wrap: wrap; width: 100%; justify-content: center; }
+    .pie-legend { display: flex; flex-direction: column; gap: 8px; min-width: 240px; }
+    .pie-leg { display: grid; grid-template-columns: 14px 1fr auto; gap: 9px; align-items: center; font-size: 13px; }
+    .pie-leg .sw { width: 14px; height: 14px; border-radius: 3px; }
+    .pie-leg .pl-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pie-leg .pl-val { font-family: var(--mono); font-size: 12.5px; color: var(--muted); }
+
+    .loc-list { display: flex; flex-direction: column; gap: 0; }
+    .loc-item { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; align-items: baseline; padding: 11px 0; border-top: 1px solid var(--border); }
     .loc-item:first-child { border-top: none; }
-    .loc-item .who { font-size: 13.5px; }
-    .loc-item .amt { font-family: var(--mono); font-size: 13px; font-weight: 700; }
-    .loc-item .ll { grid-column: 1 / -1; font-size: 11.5px; }
+    .loc-item .who { font-size: 14px; }
+    .loc-item .amt { font-family: var(--mono); font-size: 13.5px; font-weight: 700; }
+    .loc-item .ll { grid-column: 1 / -1; font-size: 12px; color: var(--muted); }
     .loc-item .ll a { color: var(--blue); text-decoration: none; font-family: var(--mono); }
-    .loc-item .ll a:hover { text-decoration: underline; }
+
+    .tx-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+    .tx-toolbar input.filter { flex: 1; min-width: 220px; font-size: 14px; padding: 9px 11px;
+      border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--panel); color: var(--text); }
+    .tx-count { font-size: 12.5px; color: var(--muted); }
 
     .tx-wrap { overflow-x: auto; }
-    table.tx { width: 100%; border-collapse: collapse; font-size: 13px; }
-    table.tx th, table.tx td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
-    table.tx th { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 700; }
-    table.tx td.num, table.tx th.num { text-align: right; font-family: var(--mono); }
-    table.tx td.num.neg { color: var(--danger); }
-    table.tx tr:hover { background: var(--panel-alt); }
-    .src-tag { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; padding: 1px 6px; border-radius: 8px; }
+    table.grid { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+    table.grid th, table.grid td { text-align: left; padding: 9px 11px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    table.grid th { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 700; background: var(--panel-alt); position: sticky; top: 0; }
+    table.grid td.num, table.grid th.num { text-align: right; font-family: var(--mono); }
+    table.grid td.num.neg { color: var(--danger); }
+    table.grid tr:hover { background: var(--panel-alt); }
+    .src-tag { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; padding: 1px 7px; border-radius: 8px; white-space: nowrap; }
     .src-tag.pending { background: #fff7ec; border: 1px solid #e7c38a; color: #8a5a12; }
     .src-tag.recorded { background: var(--blue-soft); border: 1px solid var(--blue); color: var(--blue); }
-    table.tx input, table.tx select { width: 100%; padding: 6px 7px; font-size: 13px; font-family: inherit;
+    table.grid input, table.grid select { width: 100%; padding: 6px 7px; font-size: 13px; font-family: inherit;
       border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--panel); color: var(--text); }
-    table.tx input.num { font-family: var(--mono); text-align: right; }
+    table.grid input.num { font-family: var(--mono); text-align: right; }
     .row-actions { display: flex; gap: 6px; }
-    .mini-btn {
-      cursor: pointer; font-family: inherit; font-size: 11.5px; font-weight: 600; padding: 5px 9px;
-      border-radius: var(--radius); border: 1px solid var(--border-strong); background: var(--panel-alt); color: var(--text);
-    }
+    .mini-btn { cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 600; padding: 6px 10px;
+      border-radius: var(--radius); border: 1px solid var(--border-strong); background: var(--panel-alt); color: var(--text); }
     .mini-btn.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
-    .mini-btn:disabled { opacity: .5; cursor: default; }
-    .loading { color: var(--muted); font-size: 14px; padding: 30px 0; text-align: center; }
+
+    .sql-box { width: 100%; min-height: 96px; font-family: var(--mono); font-size: 13.5px; padding: 11px;
+      border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--panel); color: var(--text); resize: vertical; }
+    .sql-actions { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+    .sql-actions .spacer { flex: 1; }
+    .schema-note { font-size: 12px; color: var(--muted); font-family: var(--mono); margin: 0 0 10px; line-height: 1.5; }
+    .query-status { font-size: 12.5px; margin: 12px 0 0; min-height: 1.2em; }
+    .query-status.err { color: var(--danger); }
+    .query-status.ok { color: var(--ok); }
+    .result-wrap { margin-top: 12px; overflow-x: auto; max-height: 420px; overflow-y: auto; }
   </style>
 </head>
 
@@ -91,22 +120,68 @@
       <button type="button" class="btn" id="refreshBtn">Refresh</button>
     </div>
 
-    <div id="cards" class="cards"></div>
-
-    <div class="panels">
-      <div class="panel"><h2>Spending by account</h2><div id="byAccount"></div></div>
-      <div class="panel"><h2>By method</h2><div id="byMethod"></div></div>
-      <div class="panel"><h2>By beneficiary</h2><div id="byBeneficiary"></div></div>
-      <div class="panel"><h2>By date</h2><div id="byDate"></div></div>
+    <div class="tabs" role="tablist">
+      <button type="button" class="tab" id="tabBtnOverview" role="tab" aria-selected="true">Overview</button>
+      <button type="button" class="tab" id="tabBtnTx" role="tab" aria-selected="false">Transactions</button>
     </div>
 
-    <div class="panel"><h2>Locations</h2><div id="locations"></div></div>
+    <!-- OVERVIEW -->
+    <section id="tabOverview">
+      <div id="cards" class="cards" style="margin-bottom:20px"></div>
 
-    <div class="panel">
-      <h2>Transactions for this period</h2>
-      <div class="tx-wrap"><table class="tx" id="txTable"></table></div>
-      <p class="set-note" id="txNote" style="margin-top:10px"></p>
-    </div>
+      <div class="panel" style="margin-bottom:20px">
+        <div class="panel-head">
+          <h2>Spending</h2>
+          <span class="spacer"></span>
+          <span class="ctrl">Show
+            <select id="chartData">
+              <option value="byAccount">By account</option>
+              <option value="byMethod">By method</option>
+              <option value="byBeneficiary">By beneficiary</option>
+              <option value="byDate">By date</option>
+            </select>
+          </span>
+          <span class="ctrl">Chart
+            <select id="chartType">
+              <option value="bar">Bar</option>
+              <option value="pie">Pie</option>
+              <option value="line">Line</option>
+            </select>
+          </span>
+        </div>
+        <div id="chartArea"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h2>Locations</h2></div>
+        <div id="locations"></div>
+      </div>
+    </section>
+
+    <!-- TRANSACTIONS -->
+    <section id="tabTransactions" class="hidden">
+      <div class="panel" style="margin-bottom:20px">
+        <div class="panel-head"><h2>Query console (MySQL mirror)</h2></div>
+        <p class="schema-note" id="schemaNote"></p>
+        <textarea id="sqlBox" class="sql-box" spellcheck="false"></textarea>
+        <div class="sql-actions">
+          <button type="button" class="btn primary" id="runQuery">Run query</button>
+          <span class="tx-count" id="queryHint">Runs against your MySQL mirror table. SELECT returns rows; writes report affected rows.</span>
+        </div>
+        <p class="query-status" id="queryStatus"></p>
+        <div class="result-wrap"><table class="grid" id="queryResult"></table></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h2>Recorded transactions</h2></div>
+        <div class="tx-toolbar">
+          <input type="text" class="filter" id="txFilter" placeholder="Filter by beneficiary, account, description, method…" autocomplete="off">
+          <span class="tx-count" id="txCount"></span>
+        </div>
+        <div class="tx-wrap"><table class="grid" id="txTable"></table></div>
+        <p class="schema-note" id="txEditNote" style="margin-top:12px"></p>
+      </div>
+    </section>
   </main>
 
   <div id="toast" class="toast hidden"></div>
@@ -121,12 +196,13 @@
       const METHOD_LABELS = { cash: "Cash", wave: "Wave", orange: "Orange Money" };
       const MISSIONS = ["east", "south"];
       const titleCase = (m) => (m === "south" ? "South" : "East");
+      const PALETTE = ["#00618a", "#2e7d32", "#e3811d", "#6a3d9a", "#b3261e", "#1f9e89", "#c2185b", "#5d4037", "#455a64", "#7cb342"];
       const groupDigits = (s) => String(s).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
       const xof = (n) => { n = parseInt(n, 10) || 0; return (n < 0 ? "-" : "") + groupDigits(Math.abs(n)) + " XOF"; };
       const esc = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+      const truncate = (s, n) => { s = String(s == null ? "" : s); return s.length > n ? s.slice(0, n - 1) + "…" : s; };
 
-      let DATA = null;
-      let editingId = null;
+      let DATA = null, editingId = null;
 
       let toastTimer = null;
       function toast(msg, kind) {
@@ -134,151 +210,243 @@
         if (toastTimer) clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.add("hidden"), 2400);
         t.classList.remove("hidden");
       }
-
       async function api(path, opts) {
         const r = await fetch(path, opts);
         if (!r.ok) throw new Error("HTTP " + r.status);
         return r.json();
       }
-
       function fmtDate(iso) {
         if (!iso) return "—";
         const d = new Date(iso);
-        if (isNaN(d)) return String(iso).slice(0, 10);
+        if (isNaN(d)) return String(iso).slice(0, 16);
         return d.toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
       }
 
-      function renderCards(s) {
+      // ---- Cards (with editable starting value) ----
+      let editingStart = false;
+      function renderCards() {
+        const s = DATA.summary;
         const remNeg = s.remaining < 0;
+        const startCard = editingStart
+          ? `<div class="card-stat"><span class="k">Starting</span>` +
+            `<div class="start-edit"><input id="startInput" inputmode="numeric" value="${esc(String(s.start))}">` +
+            `</div><div class="row-actions" style="margin-top:8px">` +
+            `<button class="mini-btn primary" id="startSave">Save</button>` +
+            `<button class="mini-btn" id="startCancel">Cancel</button></div></div>`
+          : `<div class="card-stat"><span class="k">Starting</span>` +
+            `<span class="v blue">${esc(xof(s.start))}</span>` +
+            `<button class="link-btn edit-link" id="startEdit">Edit starting value</button></div>`;
         const cards = [
-          { k: "Starting", v: xof(s.start), cls: "blue" },
-          { k: "Spent", v: xof(s.spent), cls: s.spent < 0 ? "pos" : "" , sub: s.mode === "all" ? "recorded + in review" : "recorded only" },
-          { k: "Remaining", v: xof(s.remaining) + (remNeg ? " over" : ""), cls: remNeg ? "neg" : "pos" },
-          { k: "Transactions", v: String(s.recordedCount + (s.mode === "all" ? s.pendingCount : 0)), sub: s.mode === "all" ? (s.recordedCount + " recorded · " + s.pendingCount + " in review") : (s.recordedCount + " recorded") },
+          startCard,
+          `<div class="card-stat"><span class="k">Spent</span><span class="v">${esc(xof(s.spent))}</span>` +
+            `<span class="sub">${s.mode === "all" ? "recorded + in review" : "recorded only"}</span></div>`,
+          `<div class="card-stat"><span class="k">Remaining</span><span class="v ${remNeg ? "neg" : "pos"}">${esc(xof(s.remaining))}${remNeg ? " over" : ""}</span></div>`,
+          `<div class="card-stat"><span class="k">Transactions</span><span class="v">${s.recordedCount + (s.mode === "all" ? s.pendingCount : 0)}</span>` +
+            `<span class="sub">${s.mode === "all" ? (s.recordedCount + " recorded · " + s.pendingCount + " in review") : (s.recordedCount + " recorded")}</span></div>`,
         ];
-        $("cards").innerHTML = cards.map((c) =>
-          `<div class="card-stat"><span class="k">${c.k}</span>` +
-          `<span class="v ${c.cls || ""}">${esc(c.v)}</span>` +
-          (c.sub ? `<span class="sub">${esc(c.sub)}</span>` : "") + `</div>`).join("");
+        $("cards").innerHTML = cards.join("");
+        if (editingStart) {
+          $("startSave").addEventListener("click", saveStart);
+          $("startCancel").addEventListener("click", () => { editingStart = false; renderCards(); });
+          $("startInput").addEventListener("keydown", (e) => { if (e.key === "Enter") saveStart(); if (e.key === "Escape") { editingStart = false; renderCards(); } });
+          $("startInput").focus();
+        } else {
+          $("startEdit").addEventListener("click", () => { editingStart = true; renderCards(); });
+        }
+      }
+      async function saveStart() {
+        const v = parseInt(($("startInput").value || "").replace(/\D/g, ""), 10);
+        try {
+          await api("/api/fund", { method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mission: MISSION, period: PERIOD, start: isNaN(v) ? 0 : v }) });
+          editingStart = false;
+          toast("Starting value saved", "ok");
+          await load();
+        } catch (e) { toast("Save failed", "err"); }
       }
 
-      function renderBars(elId, items) {
-        const el = $(elId);
-        if (!items || !items.length) { el.innerHTML = `<div class="empty-note">No transactions.</div>`; return; }
+      // ---- Charts (one at a time) ----
+      function currentChartItems() {
+        const items = (DATA[$("chartData").value] || []).slice();
+        return $("chartType").value === "line" ? items : items.slice(0, 10);
+      }
+      function renderChart() {
+        const area = $("chartArea");
+        const items = currentChartItems();
+        if (!items.length) { area.innerHTML = `<div class="empty-note">No transactions to chart.</div>`; return; }
+        const type = $("chartType").value;
+        area.innerHTML = type === "pie" ? pieSvg(items) : type === "line" ? lineSvg(items) : barSvg(items);
+      }
+      function barSvg(items) {
         const max = Math.max.apply(null, items.map((i) => Math.abs(i.total))) || 1;
-        el.innerHTML = items.map((i) => {
-          const neg = i.total < 0;
-          const w = Math.max(2, Math.round((Math.abs(i.total) / max) * 100));
-          return `<div class="bar-row">` +
-            `<span class="bar-label">${esc(i.label)}</span>` +
-            `<span class="bar-amt ${neg ? "neg" : ""}">${esc(xof(i.total))}</span>` +
-            `<span class="bar-track"><span class="bar-fill ${neg ? "neg" : ""}" style="width:${w}%"></span></span>` +
-            `<span class="bar-count">${i.count} transaction${i.count === 1 ? "" : "s"}</span>` +
-            `</div>`;
+        const W = 760, rowH = 38, top = 8, labelW = 210, valW = 130;
+        const innerW = W - labelW - valW;
+        const h = items.length * rowH + top * 2;
+        let s = `<svg viewBox="0 0 ${W} ${h}" width="100%">`;
+        items.forEach((it, i) => {
+          const y = top + i * rowH;
+          const bw = Math.max(2, Math.round(Math.abs(it.total) / max * innerW));
+          const color = it.total < 0 ? "#e3811d" : PALETTE[i % PALETTE.length];
+          s += `<text x="0" y="${y + rowH / 2}" dominant-baseline="middle" font-size="13" fill="#25323a">${esc(truncate(it.label, 26))}</text>`;
+          s += `<rect x="${labelW}" y="${y + 7}" width="${bw}" height="${rowH - 18}" rx="3" fill="${color}"></rect>`;
+          s += `<text x="${labelW + bw + 8}" y="${y + rowH / 2}" dominant-baseline="middle" font-size="12.5" font-family="monospace" fill="#25323a">${esc(xof(it.total))}</text>`;
+        });
+        return s + `</svg>`;
+      }
+      function pieSvg(items) {
+        const total = items.reduce((a, i) => a + Math.abs(i.total), 0);
+        if (!total) return `<div class="empty-note">No data.</div>`;
+        const cx = 120, cy = 120, r = 108;
+        let ang = -Math.PI / 2, paths = "";
+        items.forEach((it, i) => {
+          const frac = Math.abs(it.total) / total;
+          const color = PALETTE[i % PALETTE.length];
+          if (frac >= 0.9999) { paths += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${color}"></circle>`; return; }
+          const a2 = ang + frac * 2 * Math.PI;
+          const x1 = (cx + r * Math.cos(ang)).toFixed(2), y1 = (cy + r * Math.sin(ang)).toFixed(2);
+          const x2 = (cx + r * Math.cos(a2)).toFixed(2), y2 = (cy + r * Math.sin(a2)).toFixed(2);
+          paths += `<path d="M${cx},${cy} L${x1},${y1} A${r},${r} 0 ${frac > 0.5 ? 1 : 0} 1 ${x2},${y2} Z" fill="${color}"></path>`;
+          ang = a2;
+        });
+        const legend = items.map((it, i) => {
+          const pct = Math.round(Math.abs(it.total) / total * 100);
+          return `<div class="pie-leg"><span class="sw" style="background:${PALETTE[i % PALETTE.length]}"></span>` +
+            `<span class="pl-label">${esc(it.label)}</span><span class="pl-val">${esc(xof(it.total))} · ${pct}%</span></div>`;
         }).join("");
+        return `<div class="pie-wrap"><svg viewBox="0 0 240 240" width="240" height="240">${paths}</svg><div class="pie-legend">${legend}</div></div>`;
+      }
+      function lineSvg(items) {
+        const W = 760, H = 320, padL = 76, padR = 24, padT = 20, padB = 54;
+        const vals = items.map((i) => i.total);
+        const maxV = Math.max.apply(null, vals.concat([0])), minV = Math.min.apply(null, vals.concat([0]));
+        const span = (maxV - minV) || 1, innerW = W - padL - padR, innerH = H - padT - padB;
+        const x = (i) => padL + (items.length === 1 ? innerW / 2 : i / (items.length - 1) * innerW);
+        const y = (v) => padT + (1 - (v - minV) / span) * innerH;
+        const zeroY = y(0).toFixed(1);
+        let s = `<svg viewBox="0 0 ${W} ${H}" width="100%">`;
+        s += `<line x1="${padL}" y1="${padT}" x2="${padL}" y2="${H - padB}" stroke="#c6ccd4"/>`;
+        s += `<line x1="${padL}" y1="${zeroY}" x2="${W - padR}" y2="${zeroY}" stroke="#e0e4e9"/>`;
+        s += `<polyline points="${items.map((it, i) => x(i).toFixed(1) + "," + y(it.total).toFixed(1)).join(" ")}" fill="none" stroke="#00618a" stroke-width="2.5"/>`;
+        items.forEach((it, i) => { s += `<circle cx="${x(i).toFixed(1)}" cy="${y(it.total).toFixed(1)}" r="3.5" fill="#00618a"/>`; });
+        const step = Math.max(1, Math.ceil(items.length / 8));
+        items.forEach((it, i) => { if (i % step === 0) s += `<text x="${x(i).toFixed(1)}" y="${H - padB + 18}" font-size="10.5" text-anchor="middle" fill="#69757f">${esc((it.label || "").slice(5))}</text>`; });
+        s += `<text x="${padL - 8}" y="${(y(maxV) + 4).toFixed(1)}" font-size="10.5" text-anchor="end" fill="#69757f">${esc(groupDigits(maxV))}</text>`;
+        s += `<text x="${padL - 8}" y="${(y(minV) + 4).toFixed(1)}" font-size="10.5" text-anchor="end" fill="#69757f">${esc(groupDigits(minV))}</text>`;
+        return s + `</svg>`;
       }
 
-      function renderLocations(locs) {
-        const el = $("locations");
-        if (!locs || !locs.length) { el.innerHTML = `<div class="empty-note">No transactions have a saved location yet.</div>`; return; }
+      // ---- Locations ----
+      function renderLocations() {
+        const el = $("locations"), locs = DATA.locations || [];
+        if (!locs.length) { el.innerHTML = `<div class="empty-note">No transactions have a saved location yet.</div>`; return; }
         el.innerHTML = `<div class="loc-list">` + locs.map((l) => {
           const acc = l.accuracy != null ? ` · ±${l.accuracy} m` : "";
-          const ll = `${l.lat.toFixed(6)}, ${l.lon.toFixed(6)}`;
-          return `<div class="loc-item">` +
-            `<span class="who">${esc(l.beneficiary || "(no name)")}</span>` +
+          return `<div class="loc-item"><span class="who">${esc(l.beneficiary || "(no name)")}</span>` +
             `<span class="amt">${esc(xof(l.amount))}</span>` +
-            `<span class="ll"><a href="https://www.google.com/maps?q=${l.lat},${l.lon}" target="_blank" rel="noopener">${esc(ll)}</a>${esc(acc)} · ${esc(fmtDate(l.recorded_at))}</span>` +
-            `</div>`;
+            `<span class="ll"><a href="https://www.google.com/maps?q=${l.lat},${l.lon}" target="_blank" rel="noopener">${l.lat.toFixed(6)}, ${l.lon.toFixed(6)}</a>${esc(acc)} · ${esc(fmtDate(l.recorded_at))}</span></div>`;
         }).join("") + `</div>`;
       }
 
-      function accountOptions(selected) {
-        const codes = Object.keys(DATA.accountCodes).sort();
-        return `<option value="">(none)</option>` + codes.map((c) =>
-          `<option value="${c}" ${c === selected ? "selected" : ""}>${esc(c + "  " + DATA.accountCodes[c])}</option>`).join("");
+      // ---- Transactions grid (filter + inline edit of recorded rows) ----
+      function accountOptions(sel) {
+        return `<option value="">(none)</option>` + Object.keys(DATA.accountCodes).sort().map((c) =>
+          `<option value="${c}" ${c === sel ? "selected" : ""}>${esc(c + "  " + DATA.accountCodes[c])}</option>`).join("");
       }
-      function methodOptions(selected) {
-        return ["cash", "wave", "orange"].map((m) =>
-          `<option value="${m}" ${m === selected ? "selected" : ""}>${METHOD_LABELS[m]}</option>`).join("");
+      function methodOptions(sel) {
+        return ["cash", "wave", "orange"].map((m) => `<option value="${m}" ${m === sel ? "selected" : ""}>${METHOD_LABELS[m]}</option>`).join("");
       }
-
+      function filteredTx() {
+        const q = ($("txFilter").value || "").trim().toLowerCase();
+        const all = DATA.transactions || [];
+        if (!q) return all;
+        return all.filter((t) => [t.beneficiary, t.account_code, t.account_name, t.description, t.method]
+          .map((x) => String(x || "").toLowerCase()).join(" ").indexOf(q) !== -1);
+      }
+      function renderTxTable() {
+        const txns = filteredTx();
+        const head = `<thead><tr><th>Date</th><th>Beneficiary</th><th>Account</th><th>Description</th>` +
+          `<th>Method</th><th class="num">Amount</th><th>Source</th><th>Edit</th></tr></thead>`;
+        const body = !txns.length
+          ? `<tbody><tr><td colspan="8" class="empty-note" style="padding:16px">No matching transactions.</td></tr></tbody>`
+          : `<tbody>` + txns.map((t) =>
+              (editingId && t.source === "recorded" && t.transaction_id === editingId) ? editRowHtml(t) : txRowHtml(t)).join("") + `</tbody>`;
+        $("txTable").innerHTML = head + body;
+        $("txCount").textContent = txns.length + " of " + (DATA.transactions || []).length + " shown";
+        $("txEditNote").textContent = DATA.summary.mode === "all"
+          ? "Recorded rows are editable here (saved to the working-fund database + CSV). In-review rows are edited on the review screen. The query console above is your MySQL mirror."
+          : "Recorded rows are editable here. Turn on “recorded plus in review” in the review Settings to also list the review queue.";
+        bindTable();
+      }
       function txRowHtml(t) {
         const neg = t.amount < 0;
-        const acct = (t.account_code || "") + (t.account_name ? " " + t.account_name : "");
-        const editable = t.source === "recorded";
-        return `<tr data-id="${esc(t.transaction_id)}">` +
-          `<td>${esc(fmtDate(t.recorded_at))}</td>` +
-          `<td>${esc(t.beneficiary || "")}</td>` +
-          `<td>${esc(acct.trim() || "—")}</td>` +
-          `<td>${esc(t.description || "")}</td>` +
+        const acct = ((t.account_code || "") + (t.account_name ? " " + t.account_name : "")).trim();
+        return `<tr><td>${esc(fmtDate(t.recorded_at))}</td><td>${esc(t.beneficiary || "")}</td>` +
+          `<td>${esc(acct || "—")}</td><td>${esc(t.description || "")}</td>` +
           `<td>${esc(METHOD_LABELS[t.method] || t.method || "")}</td>` +
           `<td class="num ${neg ? "neg" : ""}">${esc(xof(t.amount))}</td>` +
           `<td><span class="src-tag ${t.source}">${t.source === "pending" ? "In review" : "Recorded"}</span></td>` +
-          `<td><div class="row-actions">` +
-          (editable ? `<button type="button" class="mini-btn" data-edit="${esc(t.transaction_id)}">Edit</button>`
-                    : `<span class="bar-count">on review screen</span>`) +
-          `</div></td></tr>`;
+          `<td>${t.source === "recorded" ? `<button class="mini-btn" data-edit="${esc(t.transaction_id)}">Edit</button>` : `<span class="tx-count">review screen</span>`}</td></tr>`;
       }
-
       function editRowHtml(t) {
-        return `<tr data-id="${esc(t.transaction_id)}" class="editing">` +
-          `<td><input type="text" id="e_date" value="${esc(t.recorded_at || "")}"></td>` +
+        return `<tr><td><input type="text" id="e_date" value="${esc(t.recorded_at || "")}"></td>` +
           `<td><input type="text" id="e_ben" value="${esc(t.beneficiary || "")}"></td>` +
           `<td><select id="e_acc">${accountOptions(t.account_code || "")}</select></td>` +
           `<td><input type="text" id="e_desc" value="${esc(t.description || "")}"></td>` +
           `<td><select id="e_method">${methodOptions(t.method || "")}</select></td>` +
           `<td><input type="text" class="num" id="e_amt" value="${esc(String(t.amount))}"></td>` +
           `<td><span class="src-tag recorded">Recorded</span></td>` +
-          `<td><div class="row-actions">` +
-          `<button type="button" class="mini-btn primary" data-save="${esc(t.transaction_id)}">Save</button>` +
-          `<button type="button" class="mini-btn" data-cancel="1">Cancel</button>` +
-          `</div></td></tr>`;
+          `<td><div class="row-actions"><button class="mini-btn primary" data-save="${esc(t.transaction_id)}">Save</button>` +
+          `<button class="mini-btn" data-cancel="1">Cancel</button></div></td></tr>`;
       }
-
-      function renderTable() {
-        const txns = DATA.transactions || [];
-        const head = `<thead><tr><th>Date</th><th>Beneficiary</th><th>Account</th><th>Description</th>` +
-          `<th>Method</th><th class="num">Amount</th><th>Source</th><th>Edit</th></tr></thead>`;
-        if (!txns.length) {
-          $("txTable").innerHTML = head + `<tbody><tr><td colspan="8" class="empty-note" style="padding:18px">No transactions for this mission and period.</td></tr></tbody>`;
-        } else {
-          $("txTable").innerHTML = head + `<tbody>` + txns.map((t) =>
-            (editingId && t.source === "recorded" && t.transaction_id === editingId) ? editRowHtml(t) : txRowHtml(t)).join("") + `</tbody>`;
-        }
-        $("txNote").textContent = DATA.summary.mode === "all"
-          ? "Recorded transactions can be edited here. Transactions still in review are edited on the review screen."
-          : "Showing recorded (database) transactions. Turn on “recorded plus in review” in Settings to include the review queue.";
-        bindTable();
-      }
-
       function bindTable() {
         const tbl = $("txTable");
-        tbl.querySelectorAll("[data-edit]").forEach((b) =>
-          b.addEventListener("click", () => { editingId = b.dataset.edit; renderTable(); }));
-        tbl.querySelectorAll("[data-cancel]").forEach((b) =>
-          b.addEventListener("click", () => { editingId = null; renderTable(); }));
-        tbl.querySelectorAll("[data-save]").forEach((b) =>
-          b.addEventListener("click", () => saveRow(b.dataset.save)));
+        tbl.querySelectorAll("[data-edit]").forEach((b) => b.addEventListener("click", () => { editingId = b.dataset.edit; renderTxTable(); }));
+        tbl.querySelectorAll("[data-cancel]").forEach((b) => b.addEventListener("click", () => { editingId = null; renderTxTable(); }));
+        tbl.querySelectorAll("[data-save]").forEach((b) => b.addEventListener("click", () => saveRow(b.dataset.save)));
       }
-
       async function saveRow(id) {
         const amt = parseInt(($("e_amt").value || "").replace(/[^\d-]/g, ""), 10);
-        const payload = {
-          beneficiary: $("e_ben").value.trim(),
-          accountCode: $("e_acc").value,
-          description: $("e_desc").value.trim(),
-          method: $("e_method").value,
-          amount: isNaN(amt) ? 0 : amt,
-          recordedAt: $("e_date").value.trim(),
-        };
         try {
-          await api(`/api/transaction/${encodeURIComponent(id)}`, {
-            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
-          });
-          editingId = null;
-          toast("Saved", "ok");
-          await load();
+          await api(`/api/transaction/${encodeURIComponent(id)}`, { method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ beneficiary: $("e_ben").value.trim(), accountCode: $("e_acc").value,
+              description: $("e_desc").value.trim(), method: $("e_method").value, amount: isNaN(amt) ? 0 : amt, recordedAt: $("e_date").value.trim() }) });
+          editingId = null; toast("Saved", "ok"); await load();
         } catch (e) { toast("Save failed", "err"); }
+      }
+
+      // ---- MySQL query console ----
+      function defaultQuery() {
+        const tbl = (DATA.mysql && DATA.mysql.table) || "transactions_2025";
+        return "SELECT beneficiary, account, amount, method, date\nFROM `" + tbl + "`\nORDER BY date DESC\nLIMIT 100;";
+      }
+      function setupConsole() {
+        const m = DATA.mysql || {};
+        if (!m.driver) $("schemaNote").textContent = "MySQL driver not installed (pip install -r requirements.txt). The console needs it.";
+        else if (!m.enabled) $("schemaNote").textContent = "MySQL mirror is off. Turn on “Mirror to MySQL” in the review Settings to query it.";
+        else $("schemaNote").textContent = "Table `" + m.table + "` — columns: id, beneficiary, description, amount, account, method, wf_period, date.";
+        if (!$("sqlBox").value) $("sqlBox").value = defaultQuery();
+      }
+      async function runQuery() {
+        const status = $("queryStatus"), result = $("queryResult");
+        status.className = "query-status"; status.textContent = "Running…";
+        try {
+          const res = await api("/api/query", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sql: $("sqlBox").value }) });
+          if (res.error) { status.className = "query-status err"; status.textContent = res.error; result.innerHTML = ""; return; }
+          if (res.message) { status.className = "query-status ok"; status.textContent = res.message; result.innerHTML = ""; return; }
+          const cols = res.columns || [], rows = res.rows || [];
+          status.className = "query-status ok"; status.textContent = rows.length + " row" + (rows.length === 1 ? "" : "s");
+          result.innerHTML = `<thead><tr>${cols.map((c) => `<th>${esc(c)}</th>`).join("")}</tr></thead>` +
+            `<tbody>${rows.map((r) => `<tr>${r.map((v) => `<td>${esc(v)}</td>`).join("")}</tr>`).join("")}</tbody>`;
+        } catch (e) { status.className = "query-status err"; status.textContent = "Query failed."; }
+      }
+
+      // ---- Tabs ----
+      function selectTab(which) {
+        const ov = which === "overview";
+        $("tabBtnOverview").setAttribute("aria-selected", String(ov));
+        $("tabBtnTx").setAttribute("aria-selected", String(!ov));
+        $("tabOverview").classList.toggle("hidden", !ov);
+        $("tabTransactions").classList.toggle("hidden", ov);
       }
 
       function render() {
@@ -286,26 +454,25 @@
         $("missionPill").textContent = titleCase(s.mission);
         $("missionPill").className = "mission-pill " + (MISSIONS.indexOf(s.mission) !== -1 ? s.mission : "east");
         $("periodBadge").textContent = "WF " + s.period;
-        $("modeNote").textContent = s.mode === "all" ? "Counting recorded + in-review transactions" : "Counting recorded transactions only";
+        $("modeNote").textContent = s.mode === "all" ? "Counting recorded + in-review" : "Counting recorded only";
         document.title = "Working Fund: " + titleCase(s.mission) + " WF" + s.period;
-        renderCards(s);
-        renderBars("byAccount", DATA.byAccount);
-        renderBars("byMethod", DATA.byMethod);
-        renderBars("byBeneficiary", DATA.byBeneficiary);
-        renderBars("byDate", DATA.byDate);
-        renderLocations(DATA.locations);
-        renderTable();
+        renderCards();
+        renderChart();
+        renderLocations();
+        renderTxTable();
+        setupConsole();
       }
-
       async function load() {
-        try {
-          DATA = await api(`/api/dashboard?mission=${encodeURIComponent(MISSION)}&period=${encodeURIComponent(PERIOD)}`);
-          render();
-        } catch (e) {
-          document.querySelector("main.dash").insertAdjacentHTML("beforeend", `<div class="loading">Could not load the dashboard.</div>`);
-        }
+        try { DATA = await api(`/api/dashboard?mission=${encodeURIComponent(MISSION)}&period=${encodeURIComponent(PERIOD)}`); render(); }
+        catch (e) { $("cards").innerHTML = `<div class="empty-note">Could not load the dashboard.</div>`; }
       }
 
+      $("tabBtnOverview").addEventListener("click", () => selectTab("overview"));
+      $("tabBtnTx").addEventListener("click", () => selectTab("transactions"));
+      $("chartData").addEventListener("change", renderChart);
+      $("chartType").addEventListener("change", renderChart);
+      $("txFilter").addEventListener("input", renderTxTable);
+      $("runQuery").addEventListener("click", runQuery);
       $("refreshBtn").addEventListener("click", () => { editingId = null; load(); });
       load();
     })();

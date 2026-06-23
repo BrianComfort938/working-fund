@@ -154,6 +154,52 @@ def write(tx, fund_period):
                 pass
 
 
+def _cell(v):
+    """Make a MySQL value JSON-safe (datetimes, Decimals, bytes -> str)."""
+    if v is None or isinstance(v, (int, float, str, bool)):
+        return v
+    return str(v)
+
+
+def run_query(sql):
+    """Run an ad-hoc SQL statement against the MySQL mirror (the dashboard's
+    query console). Returns columns+rows for result sets, or an affected-row
+    message for writes. This targets the append-only mirror, not the canonical
+    SQLite/CSV ledger, so it is safe for the user to query and tinker with."""
+    if pymysql is None:
+        return {"error": "The pymysql driver isn't installed. Run: pip install -r requirements.txt"}
+    if not is_enabled():
+        return {"error": "MySQL is off. Turn on “Mirror to MySQL” in Settings → MySQL ledger first."}
+    sql = (sql or "").strip()
+    if not sql:
+        return {"error": "Enter a query."}
+
+    conn = None
+    try:
+        conn = _connect()
+        table = _table_name()
+        _ensure_table(conn, table)
+        with conn.cursor() as cur:
+            cur.execute(sql)
+            if cur.description:
+                cols = [d[0] for d in cur.description]
+                rows = [[_cell(r.get(c)) for c in cols] for r in cur.fetchmany(2000)]
+                conn.commit()
+                return {"columns": cols, "rows": rows, "table": table}
+            conn.commit()
+            n = cur.rowcount
+            return {"columns": [], "rows": [], "rowcount": n, "table": table,
+                    "message": f"OK — {n} row{'s' if n != 1 else ''} affected."}
+    except Exception as e:
+        return {"error": str(e)}
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
 def test_connection(overrides=None):
     """Try to connect and ensure the table, returning (ok, message).
 
