@@ -10,6 +10,7 @@ import storage
 import mysql_ledger
 import printing
 import settings
+import excel_report
 
 app = Flask(__name__)
 
@@ -441,6 +442,108 @@ def api_set_fund():
     return jsonify(_fund_summary(mission, period))
 
 
+# West African CFA franc (XOF) denominations, largest first: BCEAO banknotes
+# then coins. The 500 exists as both a note and a coin, so each is counted on
+# its own line. Used by the period-close cash count.
+DENOMS = [
+    (10000, "note"), (5000, "note"), (2000, "note"), (1000, "note"), (500, "note"),
+    (500, "coin"), (250, "coin"), (200, "coin"), (100, "coin"),
+    (50, "coin"), (25, "coin"), (10, "coin"), (5, "coin"),
+]
+
+
+def _next_period(period):
+    digits = "".join(ch for ch in str(period) if ch.isdigit())
+    val = int(digits) if digits else 0
+    return None if val >= 999 else f"{val + 1:03d}"
+
+
+def _close_record(mission, period, cash_count):
+    """Build a close snapshot from the authoritative fund summary and the cash
+    count posted by the reviewer. discrepancy = (start - spent) - counted, so a
+    positive value means cash is short and a negative value means cash is over."""
+    summary = _fund_summary(mission, period)
+    counts, counted = {}, 0
+    for value, typ in DENOMS:
+        key = excel_report.denom_key(value, typ)
+        try:
+            qty = max(0, int((cash_count or {}).get(key, 0) or 0))
+        except (TypeError, ValueError):
+            qty = 0
+        counts[key] = qty
+        counted += value * qty
+    expected = summary["remaining"]
+    return {
+        "mission": mission, "period": period,
+        "closedAt": datetime.now().isoformat(timespec="seconds"),
+        "start": summary["start"], "spent": summary["spent"],
+        "expected": expected, "counted": counted,
+        "discrepancy": expected - counted,
+        "recordedCount": summary["recordedCount"],
+        "pendingCount": summary["pendingCount"],
+        "mode": summary["mode"], "currency": "XOF",
+        "counts": counts,
+    }
+
+
+def _find_closure(mission, period):
+    for rec in reversed(settings.fund_closures(mission)):
+        if str(rec.get("period")) == str(period):
+            return rec
+    return None
+
+
+@app.route("/api/fund/closures")
+def api_fund_closures():
+    mission = _arg_mission()
+    return jsonify({
+        "mission": mission,
+        "closures": settings.fund_closures(mission),
+        "denoms": [{"value": v, "type": t, "key": excel_report.denom_key(v, t)}
+                   for v, t in DENOMS],
+    })
+
+
+@app.route("/api/fund/close", methods=["POST"])
+def api_fund_close():
+    data = request.json or {}
+    mission = data.get("mission") if data.get("mission") in MISSIONS else STATE["mission"]
+    period = data.get("period") or STATE["period"]
+    record = _close_record(mission, period, data.get("cashCount") or {})
+
+    settings.add_fund_closure(mission, record)
+
+    excel_ok = False
+    try:
+        excel_ok = bool(excel_report.append_closing(record, DENOMS))
+    except Exception as e:
+        app.logger.warning("excel closing write failed: %s", e)
+
+    closures = settings.fund_closures(mission)
+    no_print = bool(data.get("noPrint"))
+    if no_print:
+        printed = True
+    else:
+        html = _render_close_report_html(record, closures, auto_print=False)
+        printed = printing.print_html_async(html, tag="close")
+        stamp = record["closedAt"].replace(":", "").replace("-", "").replace("T", "-")
+        printing.save_pdf_async(html, storage.close_pdf_path(mission, period, stamp), tag="close")
+
+    # Advance to the next period and carry the counted cash forward as its
+    # opening balance, so the fund continues without a manual re-entry.
+    advanced = _next_period(period)
+    if advanced:
+        STATE["period"] = advanced
+        settings.set_fund_start(mission, advanced, record["counted"])
+
+    return jsonify({
+        "ok": True, "record": record, "printed": printed, "excel": excel_ok,
+        "period": STATE["period"], "advanced": advanced,
+        "carriedStart": record["counted"] if advanced else None,
+        "closures": closures,
+    })
+
+
 @app.route("/api/dashboard")
 def api_dashboard():
     mission = _arg_mission()
@@ -595,6 +698,79 @@ def print_csv_batch(batch_id):
     if html is None:
         abort(404)
     return html
+
+
+def _fmt_close_dt(iso):
+    if not iso:
+        return "—"
+    try:
+        return datetime.fromisoformat(str(iso)).strftime("%d %b %Y, %H:%M")
+    except ValueError:
+        return str(iso)[:16].replace("T", " ")
+
+
+def _close_denom_rows(record):
+    rows = []
+    counts = record.get("counts", {})
+    for value, typ in DENOMS:
+        qty = int(counts.get(excel_report.denom_key(value, typ), 0) or 0)
+        if qty:
+            rows.append({"label": f"{value:,} {typ}", "qty": qty, "total": value * qty})
+    return rows
+
+
+def _closure_view(c):
+    # "difference" shown to the office is counted minus expected: positive means
+    # extra cash on hand, negative means a shortfall.
+    diff = -int(c.get("discrepancy", 0) or 0)
+    sign = "" if diff == 0 else ("+" if diff > 0 else "−")
+    return {
+        "period": c.get("period", ""),
+        "closedAt": _fmt_close_dt(c.get("closedAt", "")),
+        "counted": f"{int(c.get('counted', 0) or 0):,}",
+        "diff": sign + f"{abs(diff):,}",
+        "diff_raw": diff,
+    }
+
+
+def _render_close_report_html(record, closures, auto_print):
+    disc = int(record.get("discrepancy", 0) or 0)
+    if disc > 0:
+        disc_label, disc_state = "Short — cash missing", "short"
+    elif disc < 0:
+        disc_label, disc_state = "Over — extra cash", "over"
+    else:
+        disc_label, disc_state = "Balanced", "ok"
+    key = (record.get("period"), record.get("closedAt"))
+    history = [c for c in closures if (c.get("period"), c.get("closedAt")) != key]
+    history = list(reversed(history))[:12]
+    return render_template(
+        "close_report.html",
+        mission=(record.get("mission", "") or "").title(),
+        period=record.get("period", ""),
+        closed_at=_fmt_close_dt(record.get("closedAt", "")),
+        currency=record.get("currency", "XOF"),
+        start=f"{int(record.get('start', 0) or 0):,}",
+        spent=f"{int(record.get('spent', 0) or 0):,}",
+        expected=f"{int(record.get('expected', 0) or 0):,}",
+        counted=f"{int(record.get('counted', 0) or 0):,}",
+        discrepancy=f"{abs(disc):,}",
+        disc_label=disc_label, disc_state=disc_state, disc_raw=disc,
+        recorded_count=record.get("recordedCount", 0),
+        denom_rows=_close_denom_rows(record),
+        history=[_closure_view(c) for c in history],
+        auto_print=auto_print,
+    )
+
+
+@app.route("/print/close/<mission>/<period>")
+def print_close(mission, period):
+    if mission not in MISSIONS:
+        abort(404)
+    rec = _find_closure(mission, period)
+    if not rec:
+        abort(404)
+    return _render_close_report_html(rec, settings.fund_closures(mission), auto_print=True)
 
 
 def _open_browser(port):

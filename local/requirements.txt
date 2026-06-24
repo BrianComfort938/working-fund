@@ -1,4 +1,5 @@
 Flask>=3.0
 pymongo>=4.6
-pymysql>=1.1        
-selenium>=4.6       
+pymysql>=1.1
+selenium>=4.6
+openpyxl>=3.1

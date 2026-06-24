@@ -714,12 +714,142 @@
       `<span class="fund-detail"><span>Start <b>${groupDigits(f.start)}</b></span>` +
       `<span>Spent <b>${groupDigits(f.spent)}</b></span></span>` +
       `<span class="fund-foot">${f.recordedCount} recorded` +
-      `${f.mode === "all" && f.pendingCount ? " &middot; " + f.pendingCount + " in review" : ""} &middot; tap to open</span>`;
+      `${f.mode === "all" && f.pendingCount ? " &middot; " + f.pendingCount + " in review" : ""} &middot; tap to close period</span>`;
   }
   async function loadFund() {
     try {
       renderFund(await api(`/api/fund?mission=${encodeURIComponent(state.mission)}&period=${encodeURIComponent(state.period)}`));
     } catch (_) {}
+  }
+
+  // --- Close working fund period --------------------------------------------
+  // Clicking the fund box opens this. The reviewer counts the cash on hand by
+  // denomination; the discrepancy against the expected balance is shown live.
+  // Continue saves the accounting (Excel + print) on the server and advances to
+  // the next period, carrying the counted cash forward as its opening balance.
+  let closeFund = { start: 0, spent: 0, remaining: 0 };
+
+  function fmtClosedDate(iso) {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    if (isNaN(d)) return String(iso).slice(0, 10);
+    return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+  }
+
+  async function openCloseModal() {
+    try {
+      const [fund, cl] = await Promise.all([
+        api(`/api/fund?mission=${encodeURIComponent(state.mission)}&period=${encodeURIComponent(state.period)}`),
+        api(`/api/fund/closures?mission=${encodeURIComponent(state.mission)}`),
+      ]);
+      closeFund = fund;
+      $("closeTitle").textContent = titleCase(state.mission) + " · WF " + state.period;
+      renderDenomGrid(cl.denoms || []);
+      renderClosureList(cl.closures || []);
+      recalcClose();
+      $("closeModal").classList.remove("hidden");
+      const first = document.querySelector("#denomGrid .denom-qty");
+      if (first) first.focus();
+    } catch (_) { toast("Could not open the close screen", "err"); }
+  }
+  function closeCloseModal() { $("closeModal").classList.add("hidden"); }
+
+  function renderDenomGrid(denoms) {
+    $("denomGrid").innerHTML = denoms.map((d) =>
+      `<label class="denom-row">` +
+        `<span class="denom-name">${groupDigits(d.value)}<span class="denom-type">${esc(d.type)}</span></span>` +
+        `<input class="denom-qty" type="text" inputmode="numeric" autocomplete="off" ` +
+          `data-key="${esc(d.key)}" data-value="${d.value}" placeholder="0">` +
+        `<span class="denom-line" data-line="${esc(d.key)}">0</span>` +
+      `</label>`).join("");
+    document.querySelectorAll("#denomGrid .denom-qty").forEach((inp) => {
+      inp.addEventListener("input", () => {
+        const digits = inp.value.replace(/\D/g, "");
+        inp.value = digits ? groupDigits(digits) : "";
+        recalcClose();
+      });
+    });
+  }
+
+  function countedTotal() {
+    let total = 0;
+    document.querySelectorAll("#denomGrid .denom-qty").forEach((inp) => {
+      const qty = parseInt((inp.value || "").replace(/\D/g, ""), 10) || 0;
+      const val = parseInt(inp.dataset.value, 10) || 0;
+      const line = qty * val;
+      const lineEl = document.querySelector(`#denomGrid .denom-line[data-line="${CSS.escape(inp.dataset.key)}"]`);
+      if (lineEl) { lineEl.textContent = groupDigits(line); lineEl.classList.toggle("has", qty > 0); }
+      total += line;
+    });
+    return total;
+  }
+
+  function reconRow(label, val, strong) {
+    return `<div class="recon-row${strong ? " strong" : ""}"><span>${esc(label)}</span><b>${groupDigits(val)}</b></div>`;
+  }
+  function recalcClose() {
+    const f = closeFund || { start: 0, spent: 0, remaining: 0 };
+    const counted = countedTotal();
+    const expected = f.remaining;        // start - spent
+    const disc = expected - counted;     // > 0 short, < 0 over
+    $("closeRecon").innerHTML =
+      reconRow("Starting amount", f.start) +
+      reconRow("Less expenses", f.spent) +
+      reconRow("Expected cash", expected, true) +
+      reconRow("Counted cash", counted, true);
+    const box = $("closeDisc");
+    if (disc === 0) {
+      box.className = "disc-box ok";
+      box.innerHTML = `<span class="disc-lab">Balanced</span><span class="disc-num">0</span>`;
+    } else {
+      const short = disc > 0;
+      box.className = "disc-box " + (short ? "short" : "over");
+      box.innerHTML = `<span class="disc-lab">${short ? "Short — cash missing" : "Over — extra cash"}</span>` +
+        `<span class="disc-num">${groupDigits(Math.abs(disc))} XOF</span>`;
+    }
+  }
+
+  function renderClosureList(closures) {
+    const el = $("closureList");
+    if (!closures || !closures.length) { el.innerHTML = `<div class="closure-empty">No periods closed yet.</div>`; return; }
+    el.innerHTML = closures.slice().reverse().slice(0, 8).map((c) => {
+      const diff = -(parseInt(c.discrepancy, 10) || 0);   // counted − expected
+      const cls = diff === 0 ? "" : (diff < 0 ? "short" : "over");
+      const sign = diff > 0 ? "+" : (diff < 0 ? "−" : "");
+      return `<div class="closure-row">` +
+        `<span class="cl-period">WF ${esc(c.period)}</span>` +
+        `<span class="cl-date">${esc(fmtClosedDate(c.closedAt))}</span>` +
+        `<span class="cl-val">${groupDigits(parseInt(c.counted, 10) || 0)}</span>` +
+        `<span class="cl-diff ${cls}">${sign}${groupDigits(Math.abs(diff))}</span>` +
+        `</div>`;
+    }).join("");
+  }
+
+  async function continueClose() {
+    const cashCount = {};
+    document.querySelectorAll("#denomGrid .denom-qty").forEach((inp) => {
+      const qty = parseInt((inp.value || "").replace(/\D/g, ""), 10) || 0;
+      if (qty) cashCount[inp.dataset.key] = qty;
+    });
+    const btn = $("closeContinue");
+    btn.disabled = true;
+    try {
+      const res = await api("/api/fund/close", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mission: state.mission, period: state.period, cashCount }) });
+      if (!res.printed && res.record) window.open(`/print/close/${state.mission}/${res.record.period}`, "_blank");
+      if (res.period) {
+        state.period = res.period;
+        $("period").value = res.period;
+        localStorage.setItem("workingfund_period", res.period);
+        const pb = $("periodBadge"); if (pb) pb.textContent = "WF " + res.period;
+      }
+      const d = res.record ? (parseInt(res.record.discrepancy, 10) || 0) : 0;
+      const note = d ? ` (${groupDigits(Math.abs(d))} ${d > 0 ? "short" : "over"})` : "";
+      toast(res.advanced ? `Period closed${note}. Now on WF ${res.period}` : `Period closed${note}`, "ok");
+      closeCloseModal();
+      loadFund();
+    } catch (_) { toast("Could not close the period", "err"); }
+    finally { btn.disabled = false; }
   }
 
   function showHistory() { state.view = "history"; renderAll(); }
@@ -835,6 +965,7 @@
   function canUseKeyTips() {
     return state.view === "review" &&
       $("settingsModal").classList.contains("hidden") &&
+      $("closeModal").classList.contains("hidden") &&
       $("confirmModal").classList.contains("hidden");
   }
   function triggerKeytip(k) {
@@ -899,6 +1030,11 @@
       if (e.key === "Escape") closeSettings();
       return;
     }
+    if (!$("closeModal").classList.contains("hidden")) {
+      if (e.key === "Escape") closeCloseModal();
+      else if (e.key === "Enter" && e.target.tagName !== "BUTTON") { e.preventDefault(); continueClose(); }
+      return;
+    }
     if (state.view !== "review") { if (e.key === "Escape") showReview(); return; }
     if (!$("confirmModal").classList.contains("hidden")) {
       if (e.key === "Enter") { e.preventDefault(); doDelete(); }
@@ -935,7 +1071,10 @@
     $("fundSave").addEventListener("click", saveFund);
     $("fundStart").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); saveFund(); } });
     $("openDashboard").addEventListener("click", () => window.open(dashboardUrl(), "_blank"));
-    $("fundBox").addEventListener("click", () => window.open(dashboardUrl(), "_blank"));
+    $("fundBox").addEventListener("click", openCloseModal);
+    $("closeCancel").addEventListener("click", closeCloseModal);
+    $("closeContinue").addEventListener("click", continueClose);
+    $("closeModal").addEventListener("click", (e) => { if (e.target.id === "closeModal") closeCloseModal(); });
     ["myHost", "myPort", "myDb", "myUser", "myTable", "myPassword"].forEach((id) =>
       $(id).addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); saveMysql(); } }));
     $("settingsModal").addEventListener("click", (e) => { if (e.target.id === "settingsModal") closeSettings(); });
