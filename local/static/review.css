@@ -255,6 +255,7 @@ a.loc-link:hover { text-decoration: underline; }
 .receipts .sig-box { border: 1px solid var(--border-strong); border-radius: var(--radius); background: #fff; width: 230px; height: 86px; }
 .receipts .zone-thumb-link { display: block; line-height: 0; }
 .receipts .zone-thumb { width: 232px; height: 132px; object-fit: contain; object-position: top center; border: 1px solid var(--border-strong); border-radius: var(--radius); background: #fff; }
+.receipts .zone-embed { width: 264px; height: 132px; border: 1px solid var(--border-strong); border-radius: var(--radius); background: #fff; }
 .receipts .zone-open { font-size: 11px; color: var(--blue); text-decoration: none; }
 .receipts .zone-open:hover { text-decoration: underline; }
 .receipts .zone-error { width: 240px; font-size: 12px; line-height: 1.4; color: var(--danger); border: 1px dashed var(--danger); border-radius: var(--radius); padding: 8px; background: var(--panel); }

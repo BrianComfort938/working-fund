@@ -4,7 +4,7 @@ import threading
 import webbrowser
 from datetime import datetime
 
-from flask import Flask, jsonify, request, render_template, Response, abort
+from flask import Flask, jsonify, request, render_template, Response, abort, redirect
 
 import cloud
 import storage
@@ -762,9 +762,12 @@ def print_zone(tx_id):
     if not t:
         abort(404)
     html = _render_zone_page_html(t, auto_print=True)
-    if html is None:
-        abort(404)
-    return html
+    if html is not None:
+        return html
+    # No rasterizer (PyMuPDF missing): serve the raw PDF so it can still be printed by hand.
+    if t.get("zoneFundPdf"):
+        return redirect(f"/api/zonefund/{tx_id}.pdf")
+    abort(404)
 
 
 def _fmt_date(iso):
