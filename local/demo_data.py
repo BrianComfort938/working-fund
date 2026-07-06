@@ -105,4 +105,13 @@ SAMPLES = [
         "zoneFundPdf": _demo_zone_pdf(),
         "location": {"lat": 5.3599, "lon": -3.9880, "accuracy": 20, "at": "2026-01-19T14:50:00Z"},
     },
+    {
+        "_id": "demo8", "mission": "east", "beneficiary": "Zone — Dokui",
+        "accountCode": "00", "accountName": "400-5102 Travel In-field",
+        "description": "Zone transport fund, fetched live (demo)", "amount": 38000,
+        "currency": "XOF", "method": "cash", "createdAt": _NOW + timedelta(minutes=25),
+        "receiptImage": "", "secondReceiptImage": "",
+        # No stored PDF: the review portal fetches it live from the sheet on demand.
+        "zoneFund": {"zone": "Dokui", "sheetId": "1NEtjRwH4CRz1zXC5oVfFhvEvyaUDeJs478SoMz0As_U", "type": "transport"},
+    },
 ]
