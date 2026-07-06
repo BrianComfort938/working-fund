@@ -499,6 +499,14 @@
 
     if (t.hasSignature && t.signature) drawSignature($("sigCv"), t.signature, 6);
 
+    // If the PNG thumbnail can't be made (PyMuPDF missing), fall back to embedding
+    // the PDF itself so the sheet is still visible.
+    const zt = wrap.querySelector(".zone-thumb");
+    if (zt) zt.addEventListener("error", () => {
+      const link = zt.closest(".zone-thumb-link") || zt;
+      link.outerHTML = `<iframe class="zone-embed" src="/api/zonefund/${t.id}.pdf#toolbar=0&view=FitH" title="Zone fund sheet"></iframe>`;
+    }, { once: true });
+
     loadSimilar(t);
   }
 
