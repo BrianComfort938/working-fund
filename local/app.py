@@ -13,6 +13,7 @@ import printing
 import settings
 import prf_export
 import zone_pdf
+import zone_fetch
 
 app = Flask(__name__)
 
@@ -78,6 +79,23 @@ def _data_url_bytes(data_url):
         return base64.b64decode(b64)
     except Exception:
         return b""
+
+
+def _zone_pdf_bytes(t):
+    """PDF bytes for a zone-fund transaction: the copy stored by the API if
+    present, otherwise fetched live from the sheet (and cached into the view so
+    later calls skip the round trip). b'' if there is no zone fund or it can't be
+    fetched. This is what makes a missed record-time fetch self-heal in the portal."""
+    if not t:
+        return b""
+    data = _data_url_bytes(t.get("zoneFundPdf"))
+    if data:
+        return data
+    zf = t.get("zoneFund") or {}
+    pdf = zone_fetch.fetch_pdf(zf.get("sheetId"), zf.get("type"))
+    if pdf:
+        t["zoneFundPdf"] = "data:application/pdf;base64," + base64.b64encode(pdf).decode("ascii")
+    return pdf
 
 
 def _to_view(doc):
@@ -154,6 +172,7 @@ def _light(t):
     out["signature"] = t.get("signature")
     out["location"] = t.get("location")
     out["zoneFund"] = t.get("zoneFund")
+    out["hasZoneFund"] = bool(t.get("zoneFund"))
     out["hasZoneFundPdf"] = bool(t.get("zoneFundPdf"))
     return out
 
@@ -316,8 +335,7 @@ def api_signature(tx_id):
 
 @app.route("/api/zonefund/<tx_id>.pdf")
 def api_zonefund(tx_id):
-    t = _find_any(tx_id)
-    data = _data_url_bytes(t.get("zoneFundPdf")) if t else b""
+    data = _zone_pdf_bytes(_find_any(tx_id))
     if not data:
         abort(404)
     return Response(data, mimetype="application/pdf")
@@ -326,8 +344,7 @@ def api_zonefund(tx_id):
 @app.route("/api/zonefund/<tx_id>.png")
 def api_zonefund_png(tx_id):
     """First page of the zone sheet as a PNG — a clean inline thumbnail for review."""
-    t = _find_any(tx_id)
-    png = zone_pdf.first_page_png(_data_url_bytes(t.get("zoneFundPdf"))) if t else b""
+    png = zone_pdf.first_page_png(_zone_pdf_bytes(_find_any(tx_id)))
     if not png:
         abort(404)
     return Response(png, mimetype="image/png")
@@ -363,7 +380,7 @@ def api_approve(tx_id):
     else:
         printed = printing.print_html_async(_render_record_html(t, auto_print=False), tag="record")
     # A zone-fund transaction also prints its attached sheet on its own full page.
-    has_zone = bool(t.get("zoneFundPdf"))
+    has_zone = bool(t.get("zoneFund"))
     zone_printed = True
     if not no_print and has_zone:
         zone_html = _render_zone_page_html(t, auto_print=False)
@@ -747,7 +764,7 @@ def print_record(tx_id):
 
 
 def _render_zone_page_html(t, auto_print):
-    pages = zone_pdf.pages_to_png_data_urls(_data_url_bytes(t.get("zoneFundPdf")))
+    pages = zone_pdf.pages_to_png_data_urls(_zone_pdf_bytes(t))
     if not pages:
         return None
     zf = t.get("zoneFund") or {}
@@ -765,7 +782,7 @@ def print_zone(tx_id):
     if html is not None:
         return html
     # No rasterizer (PyMuPDF missing): serve the raw PDF so it can still be printed by hand.
-    if t.get("zoneFundPdf"):
+    if t.get("zoneFund"):
         return redirect(f"/api/zonefund/{tx_id}.pdf")
     abort(404)
 

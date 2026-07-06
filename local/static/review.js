@@ -393,18 +393,13 @@
       media += receiptFigure(t, "second", t.method === "orange" ? "Orange Money receipt" : "Wave receipt");
     }
     if (t.hasSignature) media += `<figure class="receipt-fig sig-fig"><figcaption>Signature</figcaption><canvas class="sig-box" id="sigCv" width="230" height="86"></canvas></figure>`;
-    if (t.hasZoneFundPdf) {
+    if (t.hasZoneFund) {
       const zf = t.zoneFund || {};
       const lbl = (zf.zone ? zf.zone + " · " : "") + (zf.type === "sante" ? "Health (Santé)" : "Transport") + " sheet";
       media += `<figure class="receipt-fig zone-fig"><figcaption>${esc(lbl)}</figcaption>` +
         `<a class="zone-thumb-link" href="/api/zonefund/${t.id}.pdf" target="_blank" rel="noopener" title="Open the full sheet">` +
         `<img class="zone-thumb" src="/api/zonefund/${t.id}.png" alt="${esc(lbl)}"></a>` +
         `<a class="zone-open" href="/api/zonefund/${t.id}.pdf" target="_blank" rel="noopener">Open sheet in a new tab</a></figure>`;
-    } else if (t.zoneFund) {
-      const zf = t.zoneFund;
-      const lbl = (zf.zone ? zf.zone + " " : "") + (zf.type === "sante" ? "Health" : "Transport");
-      media += `<figure class="receipt-fig"><figcaption>Zone fund</figcaption>` +
-        `<div class="zone-error">${esc(lbl)} — sheet not attached (the cloud fetch failed). Re-saving from the phone retries it.</div></figure>`;
     }
     const hasMedia = !!media;
     if (!media) media = `<div class="receipts-empty">No receipts or signature attached</div>`;
@@ -499,12 +494,21 @@
 
     if (t.hasSignature && t.signature) drawSignature($("sigCv"), t.signature, 6);
 
-    // If the PNG thumbnail can't be made (PyMuPDF missing), fall back to embedding
-    // the PDF itself so the sheet is still visible.
+    // Thumbnail failed: if the PDF itself is fetchable (e.g. PyMuPDF missing) embed
+    // it; otherwise the sheet is genuinely unreachable, so say so.
     const zt = wrap.querySelector(".zone-thumb");
-    if (zt) zt.addEventListener("error", () => {
-      const link = zt.closest(".zone-thumb-link") || zt;
-      link.outerHTML = `<iframe class="zone-embed" src="/api/zonefund/${t.id}.pdf#toolbar=0&view=FitH" title="Zone fund sheet"></iframe>`;
+    if (zt) zt.addEventListener("error", async () => {
+      const fig = zt.closest(".zone-fig");
+      let ok = false;
+      try { ok = (await fetch(`/api/zonefund/${t.id}.pdf`, { method: "HEAD" })).ok; } catch (_) {}
+      if (ok) {
+        const link = zt.closest(".zone-thumb-link") || zt;
+        link.outerHTML = `<iframe class="zone-embed" src="/api/zonefund/${t.id}.pdf#toolbar=0&view=FitH" title="Zone fund sheet"></iframe>`;
+      } else if (fig) {
+        const zf = t.zoneFund || {};
+        fig.innerHTML = `<figcaption>Zone fund</figcaption>` +
+          `<div class="zone-error">${esc((zf.zone || "") + " " + (zf.type === "sante" ? "Health" : "Transport"))} — couldn't load the sheet. Check it is shared &ldquo;anyone with the link&rdquo;.</div>`;
+      }
     }, { once: true });
 
     loadSimilar(t);
