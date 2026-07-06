@@ -26,6 +26,13 @@ local/.env
 # MySQL password), so it stays out of git just like secret_config.py.
 local/app_settings.json
 
+# Working-fund closing template + generated closures. The template holds real
+# names / bank details / financials, and the repo is public, so keep it local
+# only (like secret_config.py). Place your PRF template at local/PRF_Template.xlsx.
+local/PRF_Template.xlsx
+prf_template.xlsx
+local/closures/
+
 # OS
 .DS_Store
 Thumbs.db

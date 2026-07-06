@@ -54,11 +54,19 @@
   const PRESETS_VERSION = "2";
   const DEFAULT_PRESETS = [
     { id: "p_sacred",  label: "Return of sacred funds",      accountCode: "02", description: "", amount: 0, method: "cash" },
-    { id: "p_zhealth", label: "Zone funds health",          accountCode: "51", description: "", amount: 0, method: "cash" },
-    { id: "p_ztravel", label: "Zone funds travel",          accountCode: "00", description: "", amount: 0, method: "cash" },
     { id: "p_prepaid", label: "Prepaid power meter recharge", accountCode: "03", description: "", amount: 0, method: "wave" },
     { id: "p_power",   label: "Power bill",                 accountCode: "03", description: "", amount: 0, method: "wave" }
   ];
+  // The old "Zone funds health/travel" presets are retired in favour of the
+  // dedicated Add zone fund flow. Retired ids are stripped from saved presets once
+  // on load (see wirePresets) so a user's own presets are never disturbed.
+  const RETIRED_PRESET_IDS = ["p_zhealth", "p_ztravel"];
+
+  // Zone funds: the phone records {zone, sheetId, type}; the secure API attaches
+  // that sheet's Transport/Sante tab as a PDF. The type also sets the account.
+  const ZONES = window.WORKINGFUND_ZONES || [];
+  const ZONE_TYPE_ACCOUNT = { transport: "00", sante: "51" };
+  const ZONE_TYPE_LABEL = { transport: "Transport", sante: "Health (Santé)" };
 
   const $ = (id) => document.getElementById(id);
   const groupDigits = (s) => String(s).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
@@ -71,6 +79,7 @@
   let selectedAccount = "";
   let receiptImage = "";
   let secondImage = "";
+  let zoneFund = null;
   let signature = null;
   let signatureIsDefault = false;
   let openSignaturePad = function () {}; // assigned by wireSignature()
@@ -306,6 +315,15 @@
     setTimeout(() => $("pName").focus(), 30);
   }
   function wirePresets() {
+    // One-time: drop the retired zone presets from saved presets, keeping the user's own.
+    try {
+      const raw = localStorage.getItem("workingfund_presets");
+      if (raw) {
+        const arr = JSON.parse(raw);
+        const cleaned = arr.filter((p) => RETIRED_PRESET_IDS.indexOf(p.id) === -1);
+        if (cleaned.length !== arr.length) savePresets(cleaned);
+      }
+    } catch (_) {}
     renderPresets();
     $("cancelPreset").addEventListener("click", () => $("presetModal").classList.add("hidden"));
     $("savePreset").addEventListener("click", () => {
@@ -495,6 +513,55 @@
       catch (_) { toast("Could not read that image", "err"); }
       e.target.value = "";
     }));
+  }
+
+  function renderZoneFundPreview() {
+    const el = $("zoneFundPreview");
+    const btn = $("addZoneFund");
+    if (!el) return;
+    if (!zoneFund) {
+      el.classList.add("hidden");
+      el.innerHTML = "";
+      if (btn) btn.textContent = "Add zone fund";
+      return;
+    }
+    el.classList.remove("hidden");
+    el.innerHTML = `<span class="zf-info"><span class="zf-zone">${escapeHtml(zoneFund.zone)}</span>` +
+      `<span class="zf-type">${escapeHtml(ZONE_TYPE_LABEL[zoneFund.type] || zoneFund.type)} sheet &middot; attaches on save</span></span>` +
+      `<button type="button" class="link-btn danger" id="zoneFundRemove">Remove</button>`;
+    $("zoneFundRemove").addEventListener("click", () => { zoneFund = null; renderZoneFundPreview(); });
+    if (btn) btn.textContent = "Change";
+  }
+  function wireZoneFund() {
+    const sel = $("zoneSelect");
+    if (!sel) return;
+    sel.innerHTML = ZONES.map((z, i) => `<option value="${i}">${escapeHtml(z.name)}</option>`).join("");
+    let ztype = "transport";
+    function setZType(t) {
+      ztype = t;
+      document.querySelectorAll("#zoneTypeRow .seg").forEach((b) =>
+        b.setAttribute("aria-pressed", String(b.dataset.ztype === t)));
+    }
+    document.querySelectorAll("#zoneTypeRow .seg").forEach((b) =>
+      b.addEventListener("click", () => setZType(b.dataset.ztype)));
+    $("addZoneFund").addEventListener("click", () => {
+      if (!ZONES.length) { toast("No zones configured", "err"); return; }
+      setZType(zoneFund ? zoneFund.type : "transport");
+      if (zoneFund) { const i = ZONES.findIndex((z) => z.id === zoneFund.sheetId); if (i >= 0) sel.value = String(i); }
+      $("zoneModal").classList.remove("hidden");
+    });
+    $("zoneCancel").addEventListener("click", () => $("zoneModal").classList.add("hidden"));
+    $("zoneConfirm").addEventListener("click", () => {
+      const z = ZONES[parseInt(sel.value, 10)];
+      if (!z) { toast("Pick a zone", "err"); return; }
+      if (!ztype) { toast("Pick Transport or Health", "err"); return; }
+      zoneFund = { zone: z.name, sheetId: z.id, type: ztype };
+      const acct = ZONE_TYPE_ACCOUNT[ztype];
+      if (acct && ACCOUNT_CODES[acct]) setAccount(acct);
+      $("zoneModal").classList.add("hidden");
+      renderZoneFundPreview();
+      toast(`Zone fund: ${z.name} · ${ZONE_TYPE_LABEL[ztype]}`, "ok");
+    });
   }
 
   function drawSignature(canvas, sig, pad) {
@@ -828,11 +895,12 @@
     $("txForm").reset();
     setAccount("");
     amountSign = 1; amountDigits = ""; method = "";
-    receiptImage = ""; secondImage = ""; signature = null; signatureIsDefault = false;
+    receiptImage = ""; secondImage = ""; zoneFund = null; signature = null; signatureIsDefault = false;
     renderAmount();
     document.querySelectorAll("#methodRow .seg").forEach((x) => x.setAttribute("aria-pressed", "false"));
     ["receiptPreview", "secondPreview"].forEach((id) => { $(id).innerHTML = ""; $(id).classList.add("hidden"); });
     $("secondReceiptField").classList.add("hidden");
+    renderZoneFundPreview();
     renderSignaturePreview();
   }
   function wireSubmit() {
@@ -850,7 +918,7 @@
         description: $("description").value.trim(), amount: amountValue(),
         currency: CURRENCY, method, receiptImage,
         secondReceiptImage: SECOND_RECEIPT[method] ? secondImage : "",
-        signature, location: lastPosition,
+        signature, location: lastPosition, zoneFund: zoneFund || null,
         clientCreatedAt: new Date().toISOString(), logged: false
       };
       const btn = $("submitBtn"); btn.disabled = true; btn.textContent = "Saving...";
@@ -898,6 +966,7 @@
     wireRecent();
     wirePhoto([$("receiptCam"), $("receiptGal")], "receiptPreview", (v) => { receiptImage = v; });
     wirePhoto([$("secondCam"), $("secondGal")], "secondPreview", (v) => { secondImage = v; });
+    wireZoneFund();
     wireSignature();
     wireSigLib();
     wireWave();
@@ -906,6 +975,7 @@
     wireAutocomplete("description", "descAcPanel");
     $("beneficiary").addEventListener("input", maybeApplyDefaultSignature);
     renderAmount();
+    renderZoneFundPreview();
     renderSignaturePreview();
     setMission(currentMission());
     startGeolocation();
