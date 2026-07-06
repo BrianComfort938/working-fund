@@ -393,6 +393,19 @@
       media += receiptFigure(t, "second", t.method === "orange" ? "Orange Money receipt" : "Wave receipt");
     }
     if (t.hasSignature) media += `<figure class="receipt-fig sig-fig"><figcaption>Signature</figcaption><canvas class="sig-box" id="sigCv" width="230" height="86"></canvas></figure>`;
+    if (t.hasZoneFundPdf) {
+      const zf = t.zoneFund || {};
+      const lbl = (zf.zone ? zf.zone + " · " : "") + (zf.type === "sante" ? "Health (Santé)" : "Transport") + " sheet";
+      media += `<figure class="receipt-fig zone-fig"><figcaption>${esc(lbl)}</figcaption>` +
+        `<a class="zone-thumb-link" href="/api/zonefund/${t.id}.pdf" target="_blank" rel="noopener" title="Open the full sheet">` +
+        `<img class="zone-thumb" src="/api/zonefund/${t.id}.png" alt="${esc(lbl)}"></a>` +
+        `<a class="zone-open" href="/api/zonefund/${t.id}.pdf" target="_blank" rel="noopener">Open sheet in a new tab</a></figure>`;
+    } else if (t.zoneFund) {
+      const zf = t.zoneFund;
+      const lbl = (zf.zone ? zf.zone + " " : "") + (zf.type === "sante" ? "Health" : "Transport");
+      media += `<figure class="receipt-fig"><figcaption>Zone fund</figcaption>` +
+        `<div class="zone-error">${esc(lbl)} — sheet not attached (the cloud fetch failed). Re-saving from the phone retries it.</div></figure>`;
+    }
     const hasMedia = !!media;
     if (!media) media = `<div class="receipts-empty">No receipts or signature attached</div>`;
 
@@ -549,6 +562,7 @@
     try {
       const res = await api(`/api/approve/${t.id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(Object.assign({}, editPayload(t), { excludeReceipts, noPrint })) });
       if (!noPrint && !res.printed) window.open(`/print/${t.id}`, "_blank");
+      if (!noPrint && res.hasZone && !res.zonePrinted) window.open(`/print/zone/${t.id}`, "_blank");
       if (res.rollover) { toast("CSV hit 100 lines, printing backup sheet", "ok"); window.open(`/print/csv-batch/${res.rollover}`, "_blank"); }
       else toast(noPrint ? "Approved, not printed" : (res.printed ? "Approved & printed" : "Approved & printing"), "ok");
       pushHist(HKEY_COMMITTED, snapshot(t));

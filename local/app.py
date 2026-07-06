@@ -1,3 +1,4 @@
+import os
 import base64
 import threading
 import webbrowser
@@ -10,6 +11,8 @@ import storage
 import mysql_ledger
 import printing
 import settings
+import prf_export
+import zone_pdf
 
 app = Flask(__name__)
 
@@ -18,6 +21,11 @@ MISSIONS = ("east", "south")
 HANDLED_CAP = 60
 
 METHOD_LABELS = {"cash": "ESPÈCES", "wave": "WAVE", "orange": "ORANGE"}
+
+MISSION_LABELS = {
+    "east": "Cote D'ivoire Abidjan East Mission",
+    "south": "Cote D'ivoire Abidjan South Mission",
+}
 
 ACCOUNT_CODES = {
     "00": "400-5102 Travel In-field", "01": "400-5700 Furnishings YM",
@@ -51,6 +59,27 @@ def _img_to_data_url(val):
         return ""
 
 
+def _pdf_to_data_url(val):
+    if not val:
+        return ""
+    if isinstance(val, str):
+        return val if val.startswith("data:") else ""
+    try:
+        return "data:application/pdf;base64," + base64.b64encode(bytes(val)).decode("ascii")
+    except Exception:
+        return ""
+
+
+def _data_url_bytes(data_url):
+    if not data_url:
+        return b""
+    b64 = data_url.split(",", 1)[1] if "," in data_url else data_url
+    try:
+        return base64.b64decode(b64)
+    except Exception:
+        return b""
+
+
 def _to_view(doc):
     rid = str(doc.get("_id") or doc.get("id") or "")
     recorded = doc.get("createdAt") or doc.get("clientCreatedAt") or doc.get("recordedAt")
@@ -72,6 +101,8 @@ def _to_view(doc):
         "secondReceiptImage": _img_to_data_url(doc.get("secondReceiptImage", doc.get("waveReceiptImage"))),
         "signature": doc.get("signature") or None,
         "location": doc.get("location") or None,
+        "zoneFund": doc.get("zoneFund") if isinstance(doc.get("zoneFund"), dict) else None,
+        "zoneFundPdf": _pdf_to_data_url(doc.get("zoneFundPdf")),
     }
 
 
@@ -122,6 +153,8 @@ def _light(t):
     out["hasSignature"] = bool(t.get("signature"))
     out["signature"] = t.get("signature")
     out["location"] = t.get("location")
+    out["zoneFund"] = t.get("zoneFund")
+    out["hasZoneFundPdf"] = bool(t.get("zoneFundPdf"))
     return out
 
 
@@ -144,7 +177,7 @@ def _signature_svg(sig):
     if not paths:
         return ""
     return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" '
-            f'preserveAspectRatio="xMidYMid meet" style="width:100%;height:55px">'
+            f'preserveAspectRatio="xMidYMid meet" style="width:100%;height:110px">'
             + "".join(paths) + "</svg>")
 
 
@@ -281,6 +314,25 @@ def api_signature(tx_id):
     return Response(_signature_svg(t["signature"]), mimetype="image/svg+xml")
 
 
+@app.route("/api/zonefund/<tx_id>.pdf")
+def api_zonefund(tx_id):
+    t = _find_any(tx_id)
+    data = _data_url_bytes(t.get("zoneFundPdf")) if t else b""
+    if not data:
+        abort(404)
+    return Response(data, mimetype="application/pdf")
+
+
+@app.route("/api/zonefund/<tx_id>.png")
+def api_zonefund_png(tx_id):
+    """First page of the zone sheet as a PNG — a clean inline thumbnail for review."""
+    t = _find_any(tx_id)
+    png = zone_pdf.first_page_png(_data_url_bytes(t.get("zoneFundPdf"))) if t else b""
+    if not png:
+        abort(404)
+    return Response(png, mimetype="image/png")
+
+
 @app.route("/api/approve/<tx_id>", methods=["POST"])
 def api_approve(tx_id):
     t = _find(tx_id)
@@ -310,6 +362,12 @@ def api_approve(tx_id):
         printed = True  # nothing was printed, but suppress the print-tab fallback
     else:
         printed = printing.print_html_async(_render_record_html(t, auto_print=False), tag="record")
+    # A zone-fund transaction also prints its attached sheet on its own full page.
+    has_zone = bool(t.get("zoneFundPdf"))
+    zone_printed = True
+    if not no_print and has_zone:
+        zone_html = _render_zone_page_html(t, auto_print=False)
+        zone_printed = bool(zone_html) and printing.print_html_async(zone_html, tag="zone")
     if rollover:
         batch_html = _render_csv_batch_html(rollover, auto_print=False)
         if batch_html:
@@ -326,7 +384,8 @@ def api_approve(tx_id):
         app.logger.warning("cloud delete (approve) failed: %s", e)
     storage.delete_receipts(t["id"])
     STATE["all"] = [x for x in STATE["all"] if x["id"] != t["id"]]
-    return jsonify({"ok": True, "rollover": rollover, "printed": printed})
+    return jsonify({"ok": True, "rollover": rollover, "printed": printed,
+                    "hasZone": has_zone, "zonePrinted": zone_printed})
 
 
 @app.route("/api/delete/<tx_id>", methods=["POST"])
@@ -490,6 +549,8 @@ def api_dashboard():
         "byBeneficiary": by_beneficiary, "byDate": by_date,
         "locations": locations,
         "accountCodes": ACCOUNT_CODES,
+        "denominations": prf_export.cash_denominations(),
+        "templateReady": prf_export.available(),
         "mysql": {
             "enabled": mysql_ledger.is_enabled(),
             "driver": mysql_ledger.driver_available(),
@@ -526,6 +587,123 @@ def api_update_transaction(tx_id):
     if not storage.update_transaction(tx_id, fields):
         return jsonify({"error": "nothing to update"}), 400
     return jsonify({"ok": True})
+
+
+# --- Closing a working fund period -----------------------------------------
+# The dashboard's close wizard drives these steps in order: fill a copy of the
+# PRF template (Payment Request totals + Cash Count), open it for printing, bump
+# the fund period (the new one starts at the standard float), and print the
+# closed period's transactions.
+
+def _account_totals(mission, period):
+    totals = {}
+    for r in storage.list_transactions(mission=mission, period=period):
+        code = (r.get("account_code") or "").strip()
+        if code:
+            totals[code] = totals.get(code, 0) + int(r.get("amount") or 0)
+    return totals
+
+
+_MONTHS = ["", "JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY",
+           "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"]
+
+
+def _period_date_range(mission, period):
+    stamps = sorted(s for s in ((r.get("recorded_at") or "").strip()
+                    for r in storage.list_transactions(mission=mission, period=period)) if s)
+    if not stamps:
+        return ""
+
+    def parse(iso):
+        try:
+            return datetime.fromisoformat(iso.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    a, b = parse(stamps[0]), parse(stamps[-1])
+    if not a or not b:
+        return ""
+    if (a.year, a.month, a.day) == (b.year, b.month, b.day):
+        return f"{a.day} {_MONTHS[a.month]} {a.year}"
+    return f"{a.day} {_MONTHS[a.month]} TO {b.day} {_MONTHS[b.month]} {b.year}"
+
+
+@app.route("/api/close/excel", methods=["POST"])
+def api_close_excel():
+    data = request.json or {}
+    mission = data.get("mission") if data.get("mission") in MISSIONS else STATE["mission"]
+    period = data.get("period") or STATE["period"]
+    if not prf_export.available():
+        return jsonify({"error": "PRF_Template.xlsx not found in the local/ folder (or openpyxl is not installed)."}), 400
+    try:
+        res = prf_export.fill_close(
+            mission=mission, mission_label=MISSION_LABELS.get(mission, ""),
+            period=period, account_totals=_account_totals(mission, period),
+            account_codes=ACCOUNT_CODES, cash_counts=data.get("cash") or {},
+            wave=data.get("wave"), orange=data.get("orange"),
+            date_range=_period_date_range(mission, period),
+        )
+    except Exception as e:
+        app.logger.warning("PRF fill failed: %s", e)
+        return jsonify({"error": f"Could not write the Excel file: {e}"}), 500
+    return jsonify({"ok": True, **res})
+
+
+@app.route("/api/close/open", methods=["POST"])
+def api_close_open():
+    """Open a generated closure workbook in the OS spreadsheet app for printing."""
+    path = (request.json or {}).get("path") or ""
+    real = os.path.realpath(path)
+    base = os.path.realpath(prf_export.OUTPUT_DIR)
+    if not (real == base or real.startswith(base + os.sep)) or not os.path.exists(real):
+        return jsonify({"error": "That file is not a generated closure."}), 404
+    try:
+        if hasattr(os, "startfile"):
+            os.startfile(real)              # Windows: opens in Excel
+        else:
+            webbrowser.open("file://" + real)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    return jsonify({"ok": True})
+
+
+@app.route("/api/close/increment", methods=["POST"])
+def api_close_increment():
+    data = request.json or {}
+    mission = data.get("mission") if data.get("mission") in MISSIONS else STATE["mission"]
+    period = data.get("period") or STATE["period"]
+    digits = "".join(ch for ch in str(period) if ch.isdigit()) or "0"
+    new_period = f"{min(999, int(digits) + 1):03d}"
+    STATE["period"] = new_period
+    start = settings.set_fund_start(mission, new_period, settings.DEFAULT_FUND_START)
+    return jsonify({"ok": True, "oldPeriod": f"{int(digits):03d}",
+                    "newPeriod": new_period, "newStart": start})
+
+
+@app.route("/api/close/print-transactions", methods=["POST"])
+def api_close_print_transactions():
+    data = request.json or {}
+    mission = data.get("mission") if data.get("mission") in MISSIONS else STATE["mission"]
+    period = data.get("period") or STATE["period"]
+    printed = printing.print_html_async(_render_period_html(mission, period, auto_print=False), tag="period")
+    rows = storage.list_transactions(mission=mission, period=period)
+    return jsonify({"ok": True, "printed": printed, "count": len(rows)})
+
+
+def _render_period_html(mission, period, auto_print):
+    rows = storage.list_transactions(mission=mission, period=period)
+    return render_template(
+        "period_transactions.html", rows=rows, mission=mission,
+        mission_label=MISSION_LABELS.get(mission, mission), period=period,
+        count=len(rows), total=sum(int(r.get("amount") or 0) for r in rows),
+        date_range=_period_date_range(mission, period) or "—",
+        printed_at=datetime.now().strftime("%Y-%m-%d %H:%M"), auto_print=auto_print)
+
+
+@app.route("/print/period/<mission>/<period>")
+def print_period(mission, period):
+    if mission not in MISSIONS:
+        abort(404)
+    return _render_period_html(mission, period, auto_print=True)
 
 
 @app.route("/dashboard")
@@ -566,6 +744,27 @@ def print_record(tx_id):
     if not t:
         abort(404)
     return _render_record_html(t, auto_print=True)
+
+
+def _render_zone_page_html(t, auto_print):
+    pages = zone_pdf.pages_to_png_data_urls(_data_url_bytes(t.get("zoneFundPdf")))
+    if not pages:
+        return None
+    zf = t.get("zoneFund") or {}
+    ztype = "Health (Santé)" if zf.get("type") == "sante" else "Transport"
+    return render_template("zone_page.html", pages=pages, auto_print=auto_print,
+                           zone=zf.get("zone", ""), ztype=ztype)
+
+
+@app.route("/print/zone/<tx_id>")
+def print_zone(tx_id):
+    t = _find_any(tx_id)
+    if not t:
+        abort(404)
+    html = _render_zone_page_html(t, auto_print=True)
+    if html is None:
+        abort(404)
+    return html
 
 
 def _fmt_date(iso):

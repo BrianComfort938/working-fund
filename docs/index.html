@@ -39,6 +39,14 @@
         <div class="presets-row" id="presetsRow"></div>
       </div>
 
+      <div class="field">
+        <div class="presets-head">
+          <span class="field-label">Zone fund</span>
+          <button type="button" id="addZoneFund" class="link-btn">Add zone fund</button>
+        </div>
+        <div id="zoneFundPreview" class="zone-fund hidden"></div>
+      </div>
+
       <label class="field">
         <span class="field-label">Beneficiary</span>
         <div class="ac" id="benAc">
@@ -279,6 +287,31 @@
     </div>
   </div>
 
+  <div id="zoneModal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head"><h2>Add zone fund</h2></div>
+      <p class="hint">Attach a zone's Transport or Health sheet as the receipt. The account
+        is set for you; enter the beneficiary and amount as usual. The sheet is fetched and
+        attached when the transaction saves to the cloud.</p>
+      <div class="field">
+        <span class="field-label">Zone</span>
+        <select id="zoneSelect" class="zone-select"></select>
+      </div>
+      <div class="field">
+        <span class="field-label">Type</span>
+        <div class="segmented" id="zoneTypeRow" role="group" aria-label="Zone fund type">
+          <button type="button" class="seg" data-ztype="transport">Transport</button>
+          <button type="button" class="seg" data-ztype="sante">Health (Sant&eacute;)</button>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <span class="spacer"></span>
+        <button id="zoneCancel" class="btn">Cancel</button>
+        <button id="zoneConfirm" class="btn primary">Attach</button>
+      </div>
+    </div>
+  </div>
+
   <div id="sigModal" class="modal hidden">
     <div class="modal-card sig-card">
       <div class="modal-head"><h2>Signature</h2></div>
@@ -294,6 +327,7 @@
   </div>
 
   <script src="config.js"></script>
+  <script src="zones.js"></script>
   <script src="app.js"></script>
 </body>
 

@@ -1,6 +1,17 @@
 const { Binary } = require("mongodb");
 const { getDb } = require("./_lib/db");
 const { withCors, readBody } = require("./_lib/cors");
+const { fetchZonePdf } = require("./_lib/zones");
+
+const SHEET_ID_RE = /^[A-Za-z0-9_-]{20,}$/;
+
+function cleanZoneFund(zf) {
+  if (!zf || typeof zf !== "object") return null;
+  const type = zf.type === "sante" ? "sante" : zf.type === "transport" ? "transport" : null;
+  const sheetId = String(zf.sheetId || "");
+  if (!type || !SHEET_ID_RE.test(sheetId)) return null;
+  return { zone: String(zf.zone || "").slice(0, 60), sheetId, type };
+}
 
 function toBinary(dataUrl) {
   if (!dataUrl || typeof dataUrl !== "string") return "";
@@ -57,8 +68,23 @@ module.exports = async (req, res) => {
         createdAt: new Date(),
         logged: false,
       };
+      // Zone fund: the phone sends only {zone, sheetId, type}; fetch that tab as a
+      // PDF from the (link-shared) Google Sheet and store it on the record. If the
+      // fetch fails the transaction is still saved, flagged so the office can retry.
+      const zf = cleanZoneFund(body.zoneFund);
+      if (zf) {
+        doc.zoneFund = zf;
+        const pdf = await fetchZonePdf(zf.sheetId, zf.type);
+        if (pdf) {
+          doc.zoneFundPdf = new Binary(pdf.buffer);
+          doc.zoneFund.gid = pdf.gid;
+          doc.zoneFund.fetchedAt = new Date();
+        } else {
+          doc.zoneFund.pdfError = true;
+        }
+      }
       const r = await col.insertOne(doc);
-      return res.status(201).json({ _id: r.insertedId });
+      return res.status(201).json({ _id: r.insertedId, zoneFundPdf: !!doc.zoneFundPdf });
     }
 
     if (req.method === "GET") {

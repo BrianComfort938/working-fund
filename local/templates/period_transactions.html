@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>WF {{ period }} {{ mission }} — Transactions</title>
+    <style>
+        @page { size: A4; margin: 0; }
+        * { box-sizing: border-box; }
+        html, body { margin: 0; }
+
+        body {
+            width: 788px;
+            padding: 30px;
+            font-family: Calibri, Arial, sans-serif;
+            color: #1a2228;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .hd {
+            display: flex; justify-content: space-between; align-items: flex-end;
+            border-bottom: 2px solid #2d3c45; padding-bottom: 6px; margin-bottom: 8px;
+        }
+        .hd h1 { font-size: 15px; margin: 0; color: #2d3c45; }
+        .hd .meta { text-align: right; font-size: 9px; color: #555; line-height: 1.45; }
+
+        .range { font-size: 11px; margin: 0 0 8px; }
+        .range b { color: #00618a; }
+        .range .arrow { color: #69757f; padding: 0 4px; }
+
+        table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        th, td {
+            border: 1px solid #b9c0c8; padding: 1px 4px;
+            font-size: 8.5px; line-height: 1.15; text-align: left;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        th {
+            background: #e9edf0; font-size: 7.5px; color: #2d3c45;
+            text-transform: uppercase; letter-spacing: .02em;
+        }
+        td.amt, th.amt { text-align: right; font-variant-numeric: tabular-nums; }
+        td.neg { color: #b3261e; }
+        tbody tr:nth-child(even) td { background: #f6f8f9; }
+        tfoot td { font-weight: bold; border-top: 2px solid #2d3c45; background: #eef2f4; }
+    </style>
+</head>
+
+<body>
+    <div class="hd">
+        <h1>Working Fund &mdash; Closed Period Transactions</h1>
+        <div class="meta">
+            {{ mission_label }}<br>
+            WF period {{ period }} &middot; printed {{ printed_at }}
+        </div>
+    </div>
+
+    <p class="range">
+        <b>{{ count }}</b> recorded transaction{{ '' if count == 1 else 's' }}
+        <span class="arrow">&nbsp;|&nbsp;</span>
+        {{ date_range }}
+    </p>
+
+    <table>
+        <colgroup>
+            <col style="width:22px"><col style="width:96px"><col style="width:150px">
+            <col style="width:150px"><col><col style="width:52px"><col style="width:86px">
+        </colgroup>
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Recorded</th>
+                <th>Beneficiary</th>
+                <th>Account</th>
+                <th>Description</th>
+                <th>Method</th>
+                <th class="amt">Amount</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in rows %}
+            <tr>
+                <td>{{ loop.index }}</td>
+                <td>{{ (r.recorded_at or '')[:16].replace('T', ' ') }}</td>
+                <td>{{ r.beneficiary }}</td>
+                <td>{{ r.account_name or r.account_code }}</td>
+                <td>{{ r.description }}</td>
+                <td>{{ r.method }}</td>
+                <td class="amt {{ 'neg' if (r.amount or 0) < 0 else '' }}">{{ "{:,}".format(r.amount|int) }} {{ r.currency }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr>
+                <td colspan="6" class="amt">TOTAL</td>
+                <td class="amt {{ 'neg' if total < 0 else '' }}">{{ "{:,}".format(total|int) }} XOF</td>
+            </tr>
+        </tfoot>
+    </table>
+
+    {% if auto_print %}<script>
+        window.addEventListener('load', function () { setTimeout(function () { window.print(); }, 300); });
+        window.addEventListener('afterprint', function () { window.close(); });
+    </script>{% endif %}
+</body>
+
+</html>
