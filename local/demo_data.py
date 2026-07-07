@@ -91,7 +91,7 @@ SAMPLES = [
         "location": {"lat": 5.3240, "lon": -4.0180, "accuracy": 15, "at": "2026-01-19T14:41:00Z"},
     },
     {
-        "_id": "demo7", "mission": "east", "beneficiary": "Zone — Cocody",
+        "_id": "demo7", "mission": "east", "beneficiary": "Zone - Cocody",
         "accountCode": "00", "accountName": "400-5102 Travel In-field",
         "description": "Zone transport fund (demo)", "amount": 45000,
         "currency": "XOF", "method": "cash", "createdAt": _NOW + timedelta(minutes=20),
@@ -101,7 +101,7 @@ SAMPLES = [
         "location": {"lat": 5.3599, "lon": -3.9880, "accuracy": 20, "at": "2026-01-19T14:50:00Z"},
     },
     {
-        "_id": "demo8", "mission": "east", "beneficiary": "Zone — Dokui",
+        "_id": "demo8", "mission": "east", "beneficiary": "Zone - Dokui",
         "accountCode": "00", "accountName": "400-5102 Travel In-field",
         "description": "Zone transport fund, fetched live (demo)", "amount": 38000,
         "currency": "XOF", "method": "cash", "createdAt": _NOW + timedelta(minutes=25),

@@ -349,11 +349,6 @@ def api_approve(tx_id):
         printed = True
     else:
         printed = printing.print_html_async(_render_record_html(t, auto_print=False), tag="record")
-    has_zone = bool(t.get("zoneFund"))
-    zone_printed = True
-    if not no_print and has_zone:
-        zone_html = _render_zone_page_html(t, auto_print=False)
-        zone_printed = bool(zone_html) and printing.print_html_async(zone_html, tag="zone")
     if rollover:
         batch_html = _render_csv_batch_html(rollover, auto_print=False)
         if batch_html:
@@ -367,8 +362,7 @@ def api_approve(tx_id):
         app.logger.warning("cloud delete (approve) failed: %s", e)
     storage.delete_receipts(t["id"])
     STATE["all"] = [x for x in STATE["all"] if x["id"] != t["id"]]
-    return jsonify({"ok": True, "rollover": rollover, "printed": printed,
-                    "hasZone": has_zone, "zonePrinted": zone_printed})
+    return jsonify({"ok": True, "rollover": rollover, "printed": printed})
 
 @app.route("/api/delete/<tx_id>", methods=["POST"])
 def api_delete(tx_id):
@@ -662,7 +656,7 @@ def _render_period_html(mission, period, auto_print):
         "period_transactions.html", rows=rows, mission=mission,
         mission_label=MISSION_LABELS.get(mission, mission), period=period,
         count=len(rows), total=sum(int(r.get("amount") or 0) for r in rows),
-        date_range=_period_date_range(mission, period) or "—",
+        date_range=_period_date_range(mission, period) or "-",
         printed_at=datetime.now().strftime("%Y-%m-%d %H:%M"), auto_print=auto_print)
 
 @app.route("/print/period/<mission>/<period>")
@@ -685,6 +679,7 @@ def _render_record_html(t, auto_print):
             date_iso, date_fr = dt.strftime("%Y-%m-%d"), dt.strftime("%d/%m/%Y")
         except ValueError:
             date_iso = t["recordedAt"][:10]
+    zone_pages = zone_pdf.pages_to_png_data_urls(_zone_pdf_bytes(t)) if t.get("zoneFund") else []
     return render_template(
         "record.html",
         beneficiary=t["beneficiary"],
@@ -698,6 +693,7 @@ def _render_record_html(t, auto_print):
         db_table=mysql_ledger.table_name(),
         fund_period=STATE["period"],
         printed_at=datetime.now().strftime("%Y-%m-%d %H:%M"),
+        zone_pages=zone_pages,
         auto_print=auto_print,
     )
 
@@ -731,7 +727,7 @@ def print_zone(tx_id):
 
 def _fmt_date(iso):
     if not iso:
-        return "—"
+        return "-"
     try:
         return datetime.fromisoformat(str(iso).replace("Z", "+00:00")).strftime("%d %b %Y")
     except ValueError:
@@ -746,7 +742,7 @@ def _render_csv_batch_html(batch_id, auto_print):
     return render_template("csv_batch.html", rows=rows, batch_id=batch_id,
                            count=len(rows), auto_print=auto_print,
                            date_start=_fmt_date(start), date_end=_fmt_date(end),
-                           periods=", ".join(periods) or "—")
+                           periods=", ".join(periods) or "-")
 
 @app.route("/print/csv-batch/<batch_id>")
 def print_csv_batch(batch_id):

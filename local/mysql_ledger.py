@@ -148,7 +148,7 @@ def run_query(sql):
             conn.commit()
             n = cur.rowcount
             return {"columns": [], "rows": [], "rowcount": n, "table": table,
-                    "message": f"OK — {n} row{'s' if n != 1 else ''} affected."}
+                    "message": f"OK - {n} row{'s' if n != 1 else ''} affected."}
     except Exception as e:
         return {"error": str(e)}
     finally:

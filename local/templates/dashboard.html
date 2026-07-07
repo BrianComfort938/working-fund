@@ -211,9 +211,7 @@
 
       <div class="panel">
         <div class="panel-head">
-          <h2>Remaining — cash count</h2>
-          <span class="spacer"></span>
-          <span class="dash-sub">Count the cash on hand + mobile money to reconcile and close the period</span>
+          <h2>Remaining: cash count</h2>
         </div>
         <div id="cashCount"></div>
       </div>
@@ -255,11 +253,11 @@
 
   <div id="discrepancyBar" class="discrepancy-bar hidden">
     <div class="disc-inner">
-      <span class="disc-item"><span class="disc-k">Starting</span><span class="disc-v" id="discStart">—</span></span>
-      <span class="disc-item"><span class="disc-k">Logged spending</span><span class="disc-v" id="discSpent">—</span></span>
-      <span class="disc-item"><span class="disc-k">Counted remaining</span><span class="disc-v" id="discCounted">—</span></span>
+      <span class="disc-item"><span class="disc-k">Starting</span><span class="disc-v" id="discStart">-</span></span>
+      <span class="disc-item"><span class="disc-k">Logged spending</span><span class="disc-v" id="discSpent">-</span></span>
+      <span class="disc-item"><span class="disc-k">Counted remaining</span><span class="disc-v" id="discCounted">-</span></span>
       <span class="disc-sep"></span>
-      <span class="disc-item big"><span class="disc-k">Difference</span><span class="disc-v" id="discDiff">—</span></span>
+      <span class="disc-item big"><span class="disc-k">Difference</span><span class="disc-v" id="discDiff">-</span></span>
       <span class="spacer"></span>
       <button type="button" class="btn primary" id="closeFundBtn">Close &amp; start new period</button>
     </div>
@@ -314,7 +312,7 @@
         return r.json();
       }
       function fmtDate(iso) {
-        if (!iso) return "—";
+        if (!iso) return "-";
         const d = new Date(iso);
         if (isNaN(d)) return String(iso).slice(0, 16);
         return d.toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
@@ -550,7 +548,7 @@
       function renderCashCount() {
         const el = $("cashCount");
         if (!el) return;
-        if (!denoms().length) { el.innerHTML = `<div class="empty-note">Cash Count denominations unavailable — put PRF_Template.xlsx in the local/ folder.</div>`; return; }
+        if (!denoms().length) { el.innerHTML = `<div class="empty-note">Cash Count denominations unavailable - put PRF_Template.xlsx in the local/ folder.</div>`; return; }
         el.innerHTML = cashUiHtml("ov") + `<div class="cash-saved" id="ovCashSaved">${esc(fmtSaved(cash.updatedAt))}</div>`;
         wireCashUi(el, "ov", updateDiscrepancy);
       }
@@ -606,7 +604,7 @@
         $("dupCount").textContent = dups.length ? (dups.length + " flagged") : "";
         if (!dups.length) { el.innerHTML = `<div class="empty-note">No likely duplicates found in this period.</div>`; return; }
         const side = (t) => `<div class="dup-side"><div class="who">${esc(t.beneficiary || "(no name)")} · ${esc(xof(t.amount))}</div>` +
-          `<div class="meta">${esc(fmtDate(t.recorded_at))} · ${esc(((t.account_code || "") + " " + (t.account_name || "")).trim() || "—")} · ${esc(METHOD_LABELS[t.method] || t.method || "")}</div></div>`;
+          `<div class="meta">${esc(fmtDate(t.recorded_at))} · ${esc(((t.account_code || "") + " " + (t.account_name || "")).trim() || "-")} · ${esc(METHOD_LABELS[t.method] || t.method || "")}</div></div>`;
         el.innerHTML = dups.map((d) => {
           const lvl = dupLevel(d.score);
           return `<div class="dup-row"><span class="dup-badge ${lvl}">${lvl}</span>${side(d.a)}${side(d.b)}` +
@@ -648,7 +646,7 @@
           setWizStatus("", "");
         } catch (e) {
           closeState.retry = true;
-          setWizStatus((e && e.message ? e.message : "That step failed") + " — press Next to retry.", "err");
+          setWizStatus((e && e.message ? e.message : "That step failed") + " - press Next to retry.", "err");
         } finally {
           closeState.running = false; $("wizNext").disabled = false;
         }
@@ -661,16 +659,13 @@
       }
       function wizCash() {
         if (!denoms().length) {
-          wizBodyHtml(`<h3>1. Cash count</h3>` +
-            `<p class="wiz-status err">Cash Count denominations aren't available — put PRF_Template.xlsx in the local/ folder. You can still press Next to continue.</p>`);
+          wizBodyHtml(`<h3>Cash count</h3>` +
+            `<p class="wiz-status err">Cash Count denominations aren't available. Put PRF_Template.xlsx in the local/ folder.</p>`);
           return;
         }
-        wizBodyHtml(`<h3>1. Cash count — count the money on hand</h3>` +
-          `<p>Enter the cash and mobile money on hand for <b>${titleCase(MISSION)} WF ${esc(PERIOD)}</b>. ` +
-          `It saves on this computer automatically and fills the Cash Count sheet in the next step.</p>` +
+        wizBodyHtml(`<h3>Cash count</h3>` +
           `<div id="wizCashMount"></div>` +
-          `<div class="cash-saved" id="wzCashSaved">${esc(fmtSaved(cash.updatedAt))}</div>` +
-          `<p class="wiz-status">Press Next when the count is right.</p>`);
+          `<div class="cash-saved" id="wzCashSaved">${esc(fmtSaved(cash.updatedAt))}</div>`);
         const mount = $("wizCashMount");
         mount.innerHTML = cashUiHtml("wz");
         wireCashUi(mount, "wz", updateDiscrepancy);
@@ -680,33 +675,29 @@
         const res = await api("/api/close/excel", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
         if (res.error) throw new Error(res.error);
         closeState.excel = res;
-        logAdd(`Updated the Excel: ${res.name} — ${res.written.length} account line(s), counted ${xof(res.countedTotal)}`);
-        const lines = (res.written || []).map((w) => `<li>${esc(w.name)} → <b>${esc(xof(w.total))}</b></li>`).join("");
+        logAdd(`Updated the Excel: ${res.name}, ${res.written.length} account line(s), counted ${xof(res.countedTotal)}`);
+        const lines = (res.written || []).map((w) => `<li>${esc(w.name)}: <b>${esc(xof(w.total))}</b></li>`).join("");
         const un = (res.unmapped || []).length ? `<p class="wiz-status err">${res.unmapped.length} account(s) had no free row on the form.</p>` : "";
-        wizBodyHtml(`<h3>2. Payment Request + Cash Count updated</h3>` +
-          `<p>Wrote <code>closures/${esc(res.name)}</code>.</p>` +
+        wizBodyHtml(`<h3>Payment Request + Cash Count</h3>` +
+          `<p><code>closures/${esc(res.name)}</code></p>` +
           `<ul>${lines || "<li>No account spending recorded this period.</li>"}</ul>` +
-          `<p>Cash Count: counted remaining <b>${esc(xof(res.countedTotal))}</b> ` +
-          `(cash ${esc(xof(res.countedCash))} + Wave ${esc(xof(res.wave))} + Orange ${esc(xof(res.orange))}).</p>${un}` +
-          `<p class="wiz-status">Press Next to open the file for printing.</p>`);
+          `<p>Counted remaining <b>${esc(xof(res.countedTotal))}</b> ` +
+          `(cash ${esc(xof(res.countedCash))} + Wave ${esc(xof(res.wave))} + Orange ${esc(xof(res.orange))}).</p>${un}`);
       }
       async function wizOpen() {
         const res = await api("/api/close/open", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path: closeState.excel && closeState.excel.path }) });
         if (res.error) throw new Error(res.error);
         logAdd("Opened the Excel file on this computer for printing");
-        wizBodyHtml(`<h3>3. Excel opened — print it</h3>` +
-          `<p>The workbook opened in Excel. Print it now (<kbd>Ctrl</kbd>+<kbd>P</kbd>) — the Payment Request and the Cash Count pages.</p>` +
-          `<p>This review stays open, so you can recalculate: change the cash count above, reopen this wizard, and a fresh file is written.</p>`);
+        wizBodyHtml(`<h3>Excel opened</h3>`);
       }
       async function wizIncrement() {
         const res = await api("/api/close/increment", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mission: MISSION, period: PERIOD }) });
         if (res.error) throw new Error(res.error);
         closeState.newPeriod = res.newPeriod;
         localStorage.setItem("workingfund_period", res.newPeriod);
-        logAdd(`Advanced the fund period ${res.oldPeriod} → ${res.newPeriod} (new start ${xof(res.newStart)})`);
-        wizBodyHtml(`<h3>4. New working fund period</h3>` +
-          `<p>Advanced <b>WF ${esc(res.oldPeriod)}</b> → <b>WF ${esc(res.newPeriod)}</b>.</p>` +
-          `<p>The new period starts at the standard float <b>${esc(xof(res.newStart))}</b>.</p>`);
+        logAdd(`Advanced the fund period ${res.oldPeriod} to ${res.newPeriod} (new start ${xof(res.newStart)})`);
+        wizBodyHtml(`<h3>New working fund period</h3>` +
+          `<p><b>WF ${esc(res.oldPeriod)}</b> to <b>WF ${esc(res.newPeriod)}</b>, start <b>${esc(xof(res.newStart))}</b>.</p>`);
       }
       async function wizPrintTx() {
         const url = `/print/period/${encodeURIComponent(MISSION)}/${encodeURIComponent(PERIOD)}`;
@@ -718,14 +709,13 @@
           else if (win && !win.closed) win.location.href = url;
           else window.open(url, "_blank");
           logAdd(`Printed ${res.count} transaction(s) from WF ${PERIOD} on paper`);
-          wizBodyHtml(`<h3>5. Printed the period's transactions</h3>` +
-            `<p>${res.printed ? "Sent" : "Opened a print tab for"} <b>${res.count}</b> transaction(s) from WF ${esc(PERIOD)} to the printer.</p>`);
+          wizBodyHtml(`<h3>Printed the period's transactions</h3>` +
+            `<p><b>${res.count}</b> transaction(s) from WF ${esc(PERIOD)}.</p>`);
         } catch (e) { if (win && !win.closed) win.close(); throw e; }
       }
       function wizDone() {
         const items = closeState.log.map((l) => `<div class="log-line"><span class="tick">✓</span><span>${esc(l)}</span></div>`).join("");
-        wizBodyHtml(`<h3>6. Working fund closed</h3><p>Everything the portal did:</p>${items}` +
-          `<p class="wiz-status">Press <b>Closed</b> to finish and open the new period.</p>`);
+        wizBodyHtml(`<h3>Working fund closed</h3>${items}`);
       }
       function finishClose() {
         const p = closeState.newPeriod;
@@ -769,7 +759,7 @@
         const neg = t.amount < 0;
         const acct = ((t.account_code || "") + (t.account_name ? " " + t.account_name : "")).trim();
         return `<tr><td>${esc(fmtDate(t.recorded_at))}</td><td>${esc(t.beneficiary || "")}</td>` +
-          `<td>${esc(acct || "—")}</td><td>${esc(t.description || "")}</td>` +
+          `<td>${esc(acct || "-")}</td><td>${esc(t.description || "")}</td>` +
           `<td>${esc(METHOD_LABELS[t.method] || t.method || "")}</td>` +
           `<td class="num ${neg ? "neg" : ""}">${esc(xof(t.amount))}</td>` +
           `<td><span class="src-tag ${t.source}">${t.source === "pending" ? "In review" : "Recorded"}</span></td>` +
@@ -810,7 +800,7 @@
         const m = DATA.mysql || {};
         if (!m.driver) $("schemaNote").textContent = "MySQL driver not installed (pip install -r requirements.txt). The console needs it.";
         else if (!m.enabled) $("schemaNote").textContent = "MySQL mirror is off. Turn on “Mirror to MySQL” in the review Settings to query it.";
-        else $("schemaNote").textContent = "Table `" + m.table + "` — columns: id, beneficiary, description, amount, account, method, wf_period, date.";
+        else $("schemaNote").textContent = "Table `" + m.table + "` - columns: id, beneficiary, description, amount, account, method, wf_period, date.";
         if (!$("sqlBox").value) $("sqlBox").value = defaultQuery();
       }
       async function runQuery() {

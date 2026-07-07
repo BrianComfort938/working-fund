@@ -566,19 +566,14 @@
     const t = cur();
     if (!t) return;
     const openHere = !noPrint && !state.silentPrint;
-    let recWin = null, zoneWin = null;
-    if (openHere) {
-      recWin = window.open("", "_blank");
-      if (t.hasZoneFund) zoneWin = window.open("", "_blank");
-    }
+    let recWin = null;
+    if (openHere) recWin = window.open("", "_blank");
     const excludeReceipts = t.excluded ? Object.keys(t.excluded).filter((k) => t.excluded[k]) : [];
     try {
       const res = await api(`/api/approve/${t.id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(Object.assign({}, editPayload(t), { excludeReceipts, noPrint })) });
       if (!noPrint) {
         if (res.printed) { if (recWin && !recWin.closed) recWin.close(); }
         else sendToPrintTab(recWin, `/print/${t.id}`);
-        if (res.hasZone && !res.zonePrinted) sendToPrintTab(zoneWin, `/print/zone/${t.id}`);
-        else if (zoneWin && !zoneWin.closed) zoneWin.close();
       }
       if (res.rollover) { toast("CSV hit 100 lines, printing backup sheet", "ok"); sendToPrintTab(null, `/print/csv-batch/${res.rollover}`); }
       else toast(noPrint ? "Approved, not printed" : (res.printed ? "Approved & printed" : "Approved & printing"), "ok");
@@ -586,7 +581,6 @@
       removeCurrent(true);
     } catch (e) {
       if (recWin && !recWin.closed) recWin.close();
-      if (zoneWin && !zoneWin.closed) zoneWin.close();
       toast("Approve failed", "err");
     }
   }
