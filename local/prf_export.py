@@ -27,8 +27,24 @@ except Exception:
     openpyxl = None
 
 BASE = os.path.dirname(os.path.abspath(__file__))
-TEMPLATE_PATH = os.path.join(BASE, "PRF_Template.xlsx")
+_ROOT = os.path.dirname(BASE)
 OUTPUT_DIR = os.path.join(BASE, "closures")
+
+# The template holds real data and is gitignored, so each machine places it by
+# hand. Accept it in the local/ folder or the project root, under either casing.
+_TEMPLATE_CANDIDATES = [
+    os.path.join(BASE, "PRF_Template.xlsx"),
+    os.path.join(BASE, "prf_template.xlsx"),
+    os.path.join(_ROOT, "PRF_Template.xlsx"),
+    os.path.join(_ROOT, "prf_template.xlsx"),
+]
+
+
+def template_path():
+    for p in _TEMPLATE_CANDIDATES:
+        if os.path.exists(p):
+            return p
+    return _TEMPLATE_CANDIDATES[0]
 
 PR_SHEET, WF_SHEET, CC_SHEET = "Payment Request", "Working Fund", "Cash Count"
 GL_FIRST_ROW, GL_LAST_ROW = 39, 63
@@ -45,7 +61,16 @@ WAVE_ROW, ORANGE_ROW = 16, 17
 
 
 def available():
-    return openpyxl is not None and os.path.exists(TEMPLATE_PATH)
+    return openpyxl is not None and os.path.exists(template_path())
+
+
+def unavailable_reason():
+    if openpyxl is None:
+        return "openpyxl is not installed. Run: pip install -r local/requirements.txt"
+    if not os.path.exists(template_path()):
+        return ("PRF_Template.xlsx was not found. Put the template in the local/ folder "
+                "(local/PRF_Template.xlsx) or in the project root.")
+    return ""
 
 
 def cash_denominations():
@@ -84,7 +109,7 @@ def fill_close(mission, mission_label, period, account_totals, account_codes,
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     out_name = f"PRF_{mission}_WF{period}_{stamp}.xlsx"
     out_path = os.path.join(OUTPUT_DIR, out_name)
-    shutil.copyfile(TEMPLATE_PATH, out_path)
+    shutil.copyfile(template_path(), out_path)
 
     wb = openpyxl.load_workbook(out_path)
     pr, cc = wb[PR_SHEET], wb[CC_SHEET]

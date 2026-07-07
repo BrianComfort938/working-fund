@@ -80,6 +80,8 @@
   let receiptImage = "";
   let secondImage = "";
   let zoneFund = null;
+  let zoneFundPdf = "";       // the pre-fetched sheet (data URL), when ready
+  let zoneAttachState = "";   // "" | loading | ready | deferred
   let signature = null;
   let signatureIsDefault = false;
   let openSignaturePad = function () {}; // assigned by wireSignature()
@@ -100,13 +102,8 @@
     return MISSIONS.indexOf(cfg.DEFAULT_MISSION) !== -1 ? cfg.DEFAULT_MISSION : "east";
   }
   function wireMission() {
-    const card = $("missionCard"), toggle = $("missionToggle"), row = $("missionRow");
-    function openMission() { row.classList.remove("hidden"); card.classList.add("open"); toggle.setAttribute("aria-expanded", "true"); }
-    function closeMission() { row.classList.add("hidden"); card.classList.remove("open"); toggle.setAttribute("aria-expanded", "false"); }
-    if (toggle) toggle.addEventListener("click", () =>
-      (row.classList.contains("hidden") ? openMission : closeMission)());
     document.querySelectorAll("#missionRow .seg").forEach((b) =>
-      b.addEventListener("click", () => { setMission(b.dataset.mission); closeMission(); }));
+      b.addEventListener("click", () => setMission(b.dataset.mission)));
   }
   function setMission(m) {
     if (MISSIONS.indexOf(m) === -1) m = "east";
@@ -292,7 +289,7 @@
     if (!presets.length) { wrap.innerHTML = `<div class="hint">No presets yet.</div>`; return; }
     wrap.innerHTML = presets.map((p) =>
       `<div class="preset-manage-row">` +
-      `<div class="pm-text"><strong>${escapeHtml(p.label)}</strong>` +
+      `<div class="pm-text">${escapeHtml(p.label)}` +
       `<span class="pm-sub">${escapeHtml(presetSummary(p))}</span></div>` +
       `<button type="button" class="link-btn danger" data-del="${p.id}">Delete</button></div>`
     ).join("");
@@ -418,7 +415,7 @@
     wrap.innerHTML = sigs.map((s) => {
       const strokes = s.sig && s.sig.s ? s.sig.s.length : 0;
       return `<div class="sig-lib-row">` +
-        `<div class="pm-text"><strong>${escapeHtml(s.name)}</strong>` +
+        `<div class="pm-text">${escapeHtml(s.name)}` +
         `<span class="pm-sub">${strokes} stroke${strokes === 1 ? "" : "s"}</span></div>` +
         `<canvas class="sig-mini" width="96" height="38" data-mini="${s.id}"></canvas>` +
         `<button type="button" class="link-btn" data-edit="${s.id}">Edit</button>` +
@@ -515,6 +512,8 @@
     }));
   }
 
+  function clearZoneFund() { zoneFund = null; zoneFundPdf = ""; zoneAttachState = ""; }
+
   function renderZoneFundPreview() {
     const el = $("zoneFundPreview");
     const btn = $("addZoneFund");
@@ -525,12 +524,39 @@
       if (btn) btn.textContent = "Add zone fund";
       return;
     }
+    const typeLabel = ZONE_TYPE_LABEL[zoneFund.type] || zoneFund.type;
+    const status = zoneAttachState === "ready" ? "sheet attached"
+      : zoneAttachState === "loading" ? "attaching the sheet in the background"
+      : zoneAttachState === "deferred" ? "sheet attaches when reviewed"
+      : "sheet attaches when reviewed";
     el.classList.remove("hidden");
     el.innerHTML = `<span class="zf-info"><span class="zf-zone">${escapeHtml(zoneFund.zone)}</span>` +
-      `<span class="zf-type">${escapeHtml(ZONE_TYPE_LABEL[zoneFund.type] || zoneFund.type)} sheet &middot; attaches on save</span></span>` +
+      `<span class="zf-type">${escapeHtml(typeLabel)}, ${status}</span></span>` +
       `<button type="button" class="link-btn danger" id="zoneFundRemove">Remove</button>`;
-    $("zoneFundRemove").addEventListener("click", () => { zoneFund = null; renderZoneFundPreview(); });
+    $("zoneFundRemove").addEventListener("click", () => { clearZoneFund(); renderZoneFundPreview(); });
     if (btn) btn.textContent = "Change";
+  }
+
+  // Pre-fetch the zone sheet the moment it is added, so saving never waits. The
+  // request runs in the background; if it is not ready by the time the user saves,
+  // the record carries only the reference and the review portal fetches on demand.
+  function startZoneAttach() {
+    const zf = zoneFund;
+    if (!zf) return;
+    const base = apiBase();
+    if (!base) { zoneAttachState = "deferred"; renderZoneFundPreview(); return; }
+    const stillCurrent = () => zoneFund && zoneFund.sheetId === zf.sheetId && zoneFund.type === zf.type;
+    zoneAttachState = "loading";
+    renderZoneFundPreview();
+    fetch(base + "/zone-pdf?sheetId=" + encodeURIComponent(zf.sheetId) + "&type=" + encodeURIComponent(zf.type))
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((d) => {
+        if (!stillCurrent()) return;               // user changed or removed it meanwhile
+        if (d && d.pdf) { zoneFundPdf = d.pdf; zoneAttachState = "ready"; }
+        else { zoneAttachState = "deferred"; }
+        renderZoneFundPreview();
+      })
+      .catch(() => { if (stillCurrent()) { zoneAttachState = "deferred"; renderZoneFundPreview(); } });
   }
   function wireZoneFund() {
     const sel = $("zoneSelect");
@@ -556,11 +582,13 @@
       if (!z) { toast("Pick a zone", "err"); return; }
       if (!ztype) { toast("Pick Transport or Health", "err"); return; }
       zoneFund = { zone: z.name, sheetId: z.id, type: ztype };
+      zoneFundPdf = ""; zoneAttachState = "";
       const acct = ZONE_TYPE_ACCOUNT[ztype];
       if (acct && ACCOUNT_CODES[acct]) setAccount(acct);
       $("zoneModal").classList.add("hidden");
       renderZoneFundPreview();
-      toast(`Zone fund: ${z.name} · ${ZONE_TYPE_LABEL[ztype]}`, "ok");
+      startZoneAttach();
+      toast(`Zone fund: ${z.name}, ${ZONE_TYPE_LABEL[ztype]}`, "ok");
     });
   }
 
@@ -895,7 +923,7 @@
     $("txForm").reset();
     setAccount("");
     amountSign = 1; amountDigits = ""; method = "";
-    receiptImage = ""; secondImage = ""; zoneFund = null; signature = null; signatureIsDefault = false;
+    receiptImage = ""; secondImage = ""; clearZoneFund(); signature = null; signatureIsDefault = false;
     renderAmount();
     document.querySelectorAll("#methodRow .seg").forEach((x) => x.setAttribute("aria-pressed", "false"));
     ["receiptPreview", "secondPreview"].forEach((id) => { $(id).innerHTML = ""; $(id).classList.add("hidden"); });
@@ -918,7 +946,7 @@
         description: $("description").value.trim(), amount: amountValue(),
         currency: CURRENCY, method, receiptImage,
         secondReceiptImage: SECOND_RECEIPT[method] ? secondImage : "",
-        signature, location: lastPosition, zoneFund: zoneFund || null,
+        signature, location: lastPosition, zoneFund: zoneFund || null, zoneFundPdf: zoneFundPdf || "",
         clientCreatedAt: new Date().toISOString(), logged: false
       };
       const btn = $("submitBtn"); btn.disabled = true; btn.textContent = "Saving...";

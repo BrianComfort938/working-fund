@@ -222,9 +222,21 @@ def _remember_handled(t):
             STATE["handled"].pop(k, None)
 
 
+def _static_version():
+    """A cache-busting token from the static files' mtime, so a pull + restart
+    serves fresh review.js/css without a manual hard-refresh."""
+    v = 0
+    for name in ("review.js", "review.css"):
+        try:
+            v = max(v, int(os.path.getmtime(os.path.join(app.static_folder, name))))
+        except OSError:
+            pass
+    return v or 1
+
+
 @app.route("/")
 def index():
-    return render_template("review.html")
+    return render_template("review.html", asset_v=_static_version())
 
 
 @app.route("/api/state")
@@ -650,7 +662,7 @@ def api_close_excel():
     mission = data.get("mission") if data.get("mission") in MISSIONS else STATE["mission"]
     period = data.get("period") or STATE["period"]
     if not prf_export.available():
-        return jsonify({"error": "PRF_Template.xlsx not found in the local/ folder (or openpyxl is not installed)."}), 400
+        return jsonify({"error": prf_export.unavailable_reason()}), 400
     try:
         res = prf_export.fill_close(
             mission=mission, mission_label=MISSION_LABELS.get(mission, ""),
@@ -727,7 +739,7 @@ def print_period(mission, period):
 def dashboard():
     mission = _arg_mission()
     period = request.args.get("period") or STATE["period"]
-    return render_template("dashboard.html", mission=mission, period=period)
+    return render_template("dashboard.html", mission=mission, period=period, asset_v=_static_version())
 
 
 def _render_record_html(t, auto_print):
