@@ -57,13 +57,8 @@
     { id: "p_prepaid", label: "Prepaid power meter recharge", accountCode: "03", description: "", amount: 0, method: "wave" },
     { id: "p_power",   label: "Power bill",                 accountCode: "03", description: "", amount: 0, method: "wave" }
   ];
-  // The old "Zone funds health/travel" presets are retired in favour of the
-  // dedicated Add zone fund flow. Retired ids are stripped from saved presets once
-  // on load (see wirePresets) so a user's own presets are never disturbed.
   const RETIRED_PRESET_IDS = ["p_zhealth", "p_ztravel"];
 
-  // Zone funds: the phone records {zone, sheetId, type}; the secure API attaches
-  // that sheet's Transport/Sante tab as a PDF. The type also sets the account.
   const ZONES = window.WORKINGFUND_ZONES || [];
   const ZONE_TYPE_ACCOUNT = { transport: "00", sante: "51" };
   const ZONE_TYPE_LABEL = { transport: "Transport", sante: "Health (Santé)" };
@@ -80,11 +75,11 @@
   let receiptImage = "";
   let secondImage = "";
   let zoneFund = null;
-  let zoneFundPdf = "";       // the pre-fetched sheet (data URL), when ready
-  let zoneAttachState = "";   // "" | loading | ready | deferred
+  let zoneFundPdf = "";
+  let zoneAttachState = "";
   let signature = null;
   let signatureIsDefault = false;
-  let openSignaturePad = function () {}; // assigned by wireSignature()
+  let openSignaturePad = function () {};
   let mission = "";
   let lastPosition = null;
   let geoWatchId = null;
@@ -312,7 +307,6 @@
     setTimeout(() => $("pName").focus(), 30);
   }
   function wirePresets() {
-    // One-time: drop the retired zone presets from saved presets, keeping the user's own.
     try {
       const raw = localStorage.getItem("workingfund_presets");
       if (raw) {
@@ -343,11 +337,6 @@
   }
   function hashStr(s) { let h = 0; for (let i = 0; i < s.length; i++) { h = (h << 5) - h + s.charCodeAt(i); h |= 0; } return h; }
 
-  // --- Default signatures -----------------------------------------------------
-  // A small per-device library of { id, name, sig } stored in localStorage as
-  // JSON (signatures are tiny vector strokes, never sent to the cloud as a
-  // library). When a transaction's beneficiary matches a saved name and the user
-  // has not drawn a signature, the matching one is applied automatically.
   const SIGS_KEY = "workingfund_signatures";
   const normName = (s) => String(s == null ? "" : s).trim().toLowerCase();
   function loadSignatures() { try { return JSON.parse(localStorage.getItem(SIGS_KEY) || "[]"); } catch (_) { return []; } }
@@ -358,20 +347,18 @@
     return loadSignatures().find((x) => normName(x.name) === key) || null;
   }
   function maybeApplyDefaultSignature() {
-    // Never override a signature the user drew themselves.
     if (signature && !signatureIsDefault) return;
     const match = findDefaultSignature($("beneficiary").value);
     if (match && match.sig) {
       signature = match.sig; signatureIsDefault = true;
     } else if (signatureIsDefault) {
-      // A default was auto-applied but the name no longer matches: clear it.
       signature = null; signatureIsDefault = false;
     }
     renderSignaturePreview();
   }
 
   let editingSigId = null;
-  let pendingSig = null; // signature being composed in the library form
+  let pendingSig = null;
 
   function renderSigFormPreview() {
     const wrap = $("sigLibPreview");
@@ -537,9 +524,6 @@
     if (btn) btn.textContent = "Change";
   }
 
-  // Pre-fetch the zone sheet the moment it is added, so saving never waits. The
-  // request runs in the background; if it is not ready by the time the user saves,
-  // the record carries only the reference and the review portal fetches on demand.
   function startZoneAttach() {
     const zf = zoneFund;
     if (!zf) return;
@@ -551,7 +535,7 @@
     fetch(base + "/zone-pdf?sheetId=" + encodeURIComponent(zf.sheetId) + "&type=" + encodeURIComponent(zf.type))
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((d) => {
-        if (!stillCurrent()) return;               // user changed or removed it meanwhile
+        if (!stillCurrent()) return;
         if (d && d.pdf) { zoneFundPdf = d.pdf; zoneAttachState = "ready"; }
         else { zoneAttachState = "deferred"; }
         renderZoneFundPreview();
@@ -668,9 +652,6 @@
     canvas.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
 
-    // Open the shared pad seeded with `initial`; `onSave` receives the new sig
-    // (or null if nothing was drawn). Used by the transaction signature field and
-    // the default-signatures library.
     openSignaturePad = function (initial, onSave) {
       onSaveCb = typeof onSave === "function" ? onSave : null;
       strokes = initial && initial.s ? initial.s.map((a) => a.slice()) : [];
@@ -692,9 +673,6 @@
   }
 
   async function loadWaveBalance() {
-    // The Wave balance is a per-device value (see Settings): the number this
-    // device last saw must survive a page refresh, so a locally saved balance
-    // always wins. Only ask the server when this device has never stored one.
     const localRaw = localStorage.getItem(balanceKey());
     if (localRaw != null && localRaw !== "") { renderWaveBalance(parseInt(localRaw, 10)); return; }
     let val = null;
@@ -970,7 +948,6 @@
     if (toastTimer) clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.add("hidden"), 2600);
   }
 
-  // Dark mode follows the time of day: dark from 7pm to 6am, light otherwise.
   function isNightTime() { const h = new Date().getHours(); return h >= 19 || h < 6; }
   function applyAutoTheme() {
     const dark = isNightTime();

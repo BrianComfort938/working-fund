@@ -1,7 +1,3 @@
-// The 13 zone-fund Google Sheets (link-shared). Each sheet has a "Transport" tab
-// and a "Sante" (health) tab. The phone only records which zone + type was chosen;
-// the secure API fetches that tab as a PDF and attaches it to the transaction.
-// Transport uses account 00 (Travel In-field); Sante uses account 51 (Missionary Medical).
 window.WORKINGFUND_ZONES = [
   { name: "Aboisso",      id: "1Jp4RffstqgIxuAb4CbBN0ikxA3nQO6tGv_p8J1bfrF4" },
   { name: "Alepe",        id: "1HZcQGjeLpC0F63PWoml_UaLfmwnv1MOCUHW71XvjMng" },

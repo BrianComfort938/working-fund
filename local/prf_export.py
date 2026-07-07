@@ -1,22 +1,3 @@
-"""Fill a copy of the PRF working-fund template when a period is closed.
-
-The template (local/PRF_Template.xlsx) is a real Payment Request workbook and is
-gitignored — it holds real names and bank details, and the repo is public. Each
-close writes a fresh copy into local/closures/ (also gitignored) so the master
-template is never altered.
-
-Three sheets:
-  * "Payment Request" — GL code rows 39..63. Each row is keyed by department
-    (col D, e.g. 1385400) + account (col E, e.g. 5102); the period's spending for
-    that account goes in col S. Rows 39..52 are the standard accounts; 53..63 are
-    spare rows we append less-common accounts into. The TOTAL (S64) and the whole
-    "Working Fund" summary sheet are formula-driven, so we never touch them.
-  * "Cash Count" — denominations in A3:A14 (two 500 rows = note + coin), the
-    counted quantity in col B, Wave in C16, Orange in C17, total in C18.
-
-openpyxl does not evaluate formulas; Excel recalculates them when the file opens,
-which is exactly when the portal opens it for printing.
-"""
 import os
 import shutil
 from datetime import datetime
@@ -30,15 +11,12 @@ BASE = os.path.dirname(os.path.abspath(__file__))
 _ROOT = os.path.dirname(BASE)
 OUTPUT_DIR = os.path.join(BASE, "closures")
 
-# The template holds real data and is gitignored, so each machine places it by
-# hand. Accept it in the local/ folder or the project root, under either casing.
 _TEMPLATE_CANDIDATES = [
     os.path.join(BASE, "PRF_Template.xlsx"),
     os.path.join(BASE, "prf_template.xlsx"),
     os.path.join(_ROOT, "PRF_Template.xlsx"),
     os.path.join(_ROOT, "prf_template.xlsx"),
 ]
-
 
 def template_path():
     for p in _TEMPLATE_CANDIDATES:
@@ -50,8 +28,6 @@ PR_SHEET, WF_SHEET, CC_SHEET = "Payment Request", "Working Fund", "Cash Count"
 GL_FIRST_ROW, GL_LAST_ROW = 39, 63
 COL_B, COL_C, COL_D, COL_E, COL_L, COL_S = 2, 3, 4, 5, 12, 19
 
-# Cash Count denomination rows, in sheet order: (row, face value, note|coin).
-# Row 7 is the 500 note, row 8 the 500 coin — the sheet lists both.
 CASH_ROWS = [
     (3, 10000, "note"), (4, 5000, "note"), (5, 2000, "note"), (6, 1000, "note"),
     (7, 500, "note"), (8, 500, "coin"), (9, 200, "coin"), (10, 100, "coin"),
@@ -59,10 +35,8 @@ CASH_ROWS = [
 ]
 WAVE_ROW, ORANGE_ROW = 16, 17
 
-
 def available():
     return openpyxl is not None and os.path.exists(template_path())
-
 
 def unavailable_reason():
     if openpyxl is None:
@@ -72,36 +46,22 @@ def unavailable_reason():
                 "(local/PRF_Template.xlsx) or in the project root.")
     return ""
 
-
 def cash_denominations():
-    """Row-aligned denomination schedule for the portal's cash-count UI."""
     return [{"row": r, "value": v, "kind": k} for (r, v, k) in CASH_ROWS]
 
-
 def _series_acct(account_name):
-    """"400-5102 Travel In-field" -> ("400", "5102")."""
     head = (account_name or "").split(" ", 1)[0]
     if "-" in head:
         series, acct = head.split("-", 1)
         return series.strip(), acct.strip()
     return None, None
 
-
 def _label(account_name):
-    """Drop the "400-5102 " prefix and upper-case, to match the template style."""
     parts = (account_name or "").split(" ", 1)
     return (parts[1] if len(parts) > 1 else account_name or "").upper()
 
-
 def fill_close(mission, mission_label, period, account_totals, account_codes,
                cash_counts, wave, orange, date_range=None):
-    """Write a filled copy of the template and return a summary dict.
-
-    account_totals: {account_code: net_amount} for the period (recorded only).
-    account_codes:  the app's ACCOUNT_CODES map {code: "400-5102 Name"}.
-    cash_counts:    {row(str/int): quantity} keyed by Cash Count row (3..14).
-    wave, orange:   mobile-money balances (ints).
-    """
     if not available():
         raise RuntimeError("PRF template or openpyxl unavailable")
 
@@ -114,7 +74,6 @@ def fill_close(mission, mission_label, period, account_totals, account_codes,
     wb = openpyxl.load_workbook(out_path)
     pr, cc = wb[PR_SHEET], wb[CC_SHEET]
 
-    # Map (series, account) -> template row, note spare rows, clear old amounts.
     row_by_key, spare_rows = {}, []
     last_line = 0
     for r in range(GL_FIRST_ROW, GL_LAST_ROW + 1):
@@ -129,7 +88,7 @@ def fill_close(mission, mission_label, period, account_totals, account_codes,
                 pass
         else:
             spare_rows.append(r)
-        pr.cell(row=r, column=COL_S).value = None  # clear the template's example values
+        pr.cell(row=r, column=COL_S).value = None
 
     written, unmapped, next_spare = [], [], 0
     for code, total in account_totals.items():
@@ -138,7 +97,7 @@ def fill_close(mission, mission_label, period, account_totals, account_codes,
         name = account_codes.get(code, "")
         series, acct = _series_acct(name)
         row = row_by_key.get((series, acct))
-        if row is None:                      # not a standard row: append to a spare
+        if row is None:
             if next_spare >= len(spare_rows):
                 unmapped.append({"code": code, "name": name, "total": int(round(total))})
                 continue
@@ -154,7 +113,6 @@ def fill_close(mission, mission_label, period, account_totals, account_codes,
         pr.cell(row=row, column=COL_S).value = int(round(total))
         written.append({"code": code, "name": name, "row": row, "total": int(round(total))})
 
-    # Cash Count: quantities in col B, mobile money in C16/C17.
     cash_total = 0
     for (r, value, _kind) in CASH_ROWS:
         qty = cash_counts.get(str(r), cash_counts.get(r, 0)) or 0
@@ -169,7 +127,6 @@ def fill_close(mission, mission_label, period, account_totals, account_codes,
     cc.cell(row=WAVE_ROW, column=COL_C).value = wave
     cc.cell(row=ORANGE_ROW, column=COL_C).value = orange
 
-    # Working Fund header (best-effort; the sheet body is all formulas).
     wf = wb[WF_SHEET]
     if mission_label:
         wf["A3"] = mission_label

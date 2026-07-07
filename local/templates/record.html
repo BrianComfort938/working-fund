@@ -30,9 +30,6 @@
 
         }
 
-        /* Faint metadata watermark down the right margin, rotated to read
-           upward (bottom-to-top). Sits in the gap between the form table and
-           the page edge so it never overlaps the printed content. */
         .watermark {
             position: absolute;
             top: 0;
@@ -206,7 +203,7 @@
             }
 
         }
-    </style>
+</style>
 </head>
 
 <body>
@@ -301,7 +298,7 @@
     {% if auto_print %}<script>
         window.addEventListener('load', function () { setTimeout(function () { window.print(); }, 300); });
         window.addEventListener('afterprint', function () { window.close(); });
-    </script>{% endif %}
+</script>{% endif %}
 </body>
 
 </html>

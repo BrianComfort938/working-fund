@@ -1,16 +1,8 @@
-"""Runtime-editable settings overlay.
-
-Defaults come from secret_config.py (gitignored, holds the credentials). The
-review portal's Settings panel can override the MySQL ledger fields at runtime,
-and those overrides are persisted to app_settings.json (also gitignored) so they
-survive a restart. secret_config.py is never rewritten.
-
-Lookup order for a setting:  app_settings.json  →  secret_config.py  →  hard default.
-"""
 import os
 import re
 import json
 import threading
+from datetime import datetime
 
 try:
     import secret_config as _cfg
@@ -23,9 +15,6 @@ SETTINGS_PATH = os.path.join(BASE, "app_settings.json")
 _lock = threading.RLock()
 _cache = None
 
-# The only settings the UI is allowed to change, with their hard defaults (used
-# when secret_config.py does not define them). MYSQL_PASSWORD is write-only: it
-# is never sent back to the browser, only updated when a new value is supplied.
 MYSQL_DEFAULTS = {
     "MYSQL_ENABLED": False,
     "MYSQL_HOST": "localhost",
@@ -38,15 +27,11 @@ MYSQL_DEFAULTS = {
 
 _TABLE_RE = re.compile(r"^[A-Za-z0-9_]+$")
 
-
 def valid_table_name(name):
-    """A table name safe to interpolate into SQL (identifiers can't be bound)."""
     return bool(name) and bool(_TABLE_RE.match(str(name))) and len(str(name)) <= 64
-
 
 def _config_default(name, hard=None):
     return getattr(_cfg, name, hard) if _cfg else hard
-
 
 def _load():
     global _cache
@@ -60,9 +45,7 @@ def _load():
                 _cache = {}
         return _cache
 
-
 def get(name, default=None):
-    """Resolve a setting: overlay first, then secret_config, then default."""
     overlay = _load()
     if name in overlay and overlay[name] is not None:
         return overlay[name]
@@ -70,13 +53,7 @@ def get(name, default=None):
         return _config_default(name, MYSQL_DEFAULTS[name])
     return _config_default(name, default)
 
-
 def mysql_config(include_password=False):
-    """Current MySQL settings for the API.
-
-    The password is omitted by default; instead a `passwordSet` flag tells the UI
-    whether one is stored, so the field can show a placeholder without leaking it.
-    """
     cfg = {
         "MYSQL_ENABLED": bool(get("MYSQL_ENABLED")),
         "MYSQL_HOST": str(get("MYSQL_HOST", "") or ""),
@@ -92,13 +69,7 @@ def mysql_config(include_password=False):
         cfg["passwordSet"] = bool(password)
     return cfg
 
-
 def update(values):
-    """Merge user-supplied MySQL settings into the overlay and persist.
-
-    Unknown keys are ignored. An empty or absent MYSQL_PASSWORD leaves the stored
-    one untouched (the field is write-only), so blanks never wipe the password.
-    """
     values = values or {}
     with _lock:
         overlay = dict(_load())
@@ -107,7 +78,7 @@ def update(values):
                 continue
             raw = values[key]
             if key == "MYSQL_PASSWORD":
-                if raw:                       # only overwrite when a value is given
+                if raw:
                     overlay[key] = str(raw)
                 continue
             if key == "MYSQL_PORT":
@@ -126,7 +97,6 @@ def update(values):
         _persist(overlay)
         return mysql_config()
 
-
 def _persist(overlay):
     global _cache
     _cache = overlay
@@ -135,15 +105,8 @@ def _persist(overlay):
         json.dump(overlay, f, indent=2)
     os.replace(tmp, SETTINGS_PATH)
 
-
-# --- Working fund -----------------------------------------------------------
-# The starting amount is kept per mission+period (a fresh fund each period), and
-# the balance mode decides whether the dashboard counts only recorded (DB)
-# transactions or also those still sitting in the review queue.
-
 def balance_mode():
     return "all" if get("FUND_BALANCE_MODE", "recorded") == "all" else "recorded"
-
 
 def set_balance_mode(mode):
     with _lock:
@@ -152,14 +115,10 @@ def set_balance_mode(mode):
         _persist(overlay)
         return overlay["FUND_BALANCE_MODE"]
 
-
 def _fund_key(mission, period):
     return f"{mission}:{period}"
 
-
-# A fresh working fund defaults to 7.5M XOF until the user sets it explicitly.
 DEFAULT_FUND_START = 7_500_000
-
 
 def fund_start(mission, period):
     starts = get("WF_START", {}) or {}
@@ -170,7 +129,6 @@ def fund_start(mission, period):
         except (TypeError, ValueError):
             return DEFAULT_FUND_START
     return DEFAULT_FUND_START
-
 
 def set_fund_start(mission, period, value):
     with _lock:
@@ -183,3 +141,43 @@ def set_fund_start(mission, period, value):
         overlay["WF_START"] = starts
         _persist(overlay)
         return starts[_fund_key(mission, period)]
+
+def _as_int(value):
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+def _clean_counts(counts):
+    out = {}
+    for key, val in (counts or {}).items():
+        n = _as_int(val)
+        if n:
+            out[str(key)] = n
+    return out
+
+def get_cash(mission, period):
+    store = get("WF_CASH", {}) or {}
+    entry = store.get(_fund_key(mission, period))
+    if isinstance(entry, dict):
+        return {
+            "counts": _clean_counts(entry.get("counts")),
+            "wave": _as_int(entry.get("wave")),
+            "orange": _as_int(entry.get("orange")),
+            "updatedAt": entry.get("updatedAt") or "",
+        }
+    return {"counts": {}, "wave": 0, "orange": 0, "updatedAt": ""}
+
+def set_cash(mission, period, counts, wave, orange):
+    with _lock:
+        overlay = dict(_load())
+        store = dict(overlay.get("WF_CASH", {}) or {})
+        store[_fund_key(mission, period)] = {
+            "counts": _clean_counts(counts),
+            "wave": _as_int(wave),
+            "orange": _as_int(orange),
+            "updatedAt": datetime.now().isoformat(timespec="seconds"),
+        }
+        overlay["WF_CASH"] = store
+        _persist(overlay)
+        return get_cash(mission, period)

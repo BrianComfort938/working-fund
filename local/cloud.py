@@ -15,7 +15,6 @@ except Exception:
 
 _collection = None
 
-
 def _connect():
     global _collection
     if not _URI:
@@ -26,10 +25,8 @@ def _connect():
         _collection = MongoClient(_URI)[_DB_NAME]["transactions"]
     return _collection
 
-
 def is_cloud():
     return bool(_URI) and MongoClient is not None
-
 
 def fetch_all(mission=None):
     col = _connect()
@@ -39,7 +36,6 @@ def fetch_all(mission=None):
     if mission in ("east", "south"):
         query["mission"] = mission
     return list(col.find(query).sort("createdAt", 1))
-
 
 def delete_tx(tx_id):
     col = _connect()

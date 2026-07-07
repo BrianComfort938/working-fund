@@ -48,7 +48,6 @@ ACCOUNT_CODES = {
     "50": "900-5102 Travel, Baggage, Visa and Other", "51": "900-5949 Missionary Medical",
 }
 
-
 def _img_to_data_url(val):
     if not val:
         return ""
@@ -58,7 +57,6 @@ def _img_to_data_url(val):
         return "data:image/jpeg;base64," + base64.b64encode(bytes(val)).decode("ascii")
     except Exception:
         return ""
-
 
 def _pdf_to_data_url(val):
     if not val:
@@ -70,7 +68,6 @@ def _pdf_to_data_url(val):
     except Exception:
         return ""
 
-
 def _data_url_bytes(data_url):
     if not data_url:
         return b""
@@ -80,12 +77,7 @@ def _data_url_bytes(data_url):
     except Exception:
         return b""
 
-
 def _zone_pdf_bytes(t):
-    """PDF bytes for a zone-fund transaction: the copy stored by the API if
-    present, otherwise fetched live from the sheet (and cached into the view so
-    later calls skip the round trip). b'' if there is no zone fund or it can't be
-    fetched. This is what makes a missed record-time fetch self-heal in the portal."""
     if not t:
         return b""
     data = _data_url_bytes(t.get("zoneFundPdf"))
@@ -96,7 +88,6 @@ def _zone_pdf_bytes(t):
     if pdf:
         t["zoneFundPdf"] = "data:application/pdf;base64," + base64.b64encode(pdf).decode("ascii")
     return pdf
-
 
 def _to_view(doc):
     rid = str(doc.get("_id") or doc.get("id") or "")
@@ -123,7 +114,6 @@ def _to_view(doc):
         "zoneFundPdf": _pdf_to_data_url(doc.get("zoneFundPdf")),
     }
 
-
 def load_queue():
     docs = cloud.fetch_all()
     if docs is None:
@@ -131,7 +121,6 @@ def load_queue():
         docs = demo_data.SAMPLES
         app.logger.info("No MONGODB_URI, running in DEMO mode with sample data.")
     STATE["all"] = [_to_view(d) for d in docs]
-
 
 def reload_queue():
     docs = cloud.fetch_all()
@@ -141,18 +130,14 @@ def reload_queue():
     STATE["all"] = [v for v in (_to_view(d) for d in docs) if v["id"] not in handled]
     return True
 
-
 def _find(tx_id):
     return next((t for t in STATE["all"] if t["id"] == tx_id), None)
-
 
 def _find_any(tx_id):
     return _find(tx_id) or STATE["handled"].get(tx_id)
 
-
 def _visible():
     return [t for t in STATE["all"] if t["mission"] == STATE["mission"]]
-
 
 def _mission_counts():
     counts = {m: 0 for m in MISSIONS}
@@ -160,7 +145,6 @@ def _mission_counts():
         if t["mission"] in counts:
             counts[t["mission"]] += 1
     return counts
-
 
 def _light(t):
     keys = ("id", "mission", "beneficiary", "accountCode", "accountName", "description",
@@ -176,11 +160,9 @@ def _light(t):
     out["hasZoneFundPdf"] = bool(t.get("zoneFundPdf"))
     return out
 
-
 def _fmt_amount(amount, currency):
     s = f"{abs(int(amount)):,}"
     return (f"-{s} {currency}" if amount < 0 else f"{s} {currency}")
-
 
 def _signature_svg(sig):
     if not sig or not sig.get("s"):
@@ -199,7 +181,6 @@ def _signature_svg(sig):
             f'preserveAspectRatio="xMidYMid meet" style="width:100%;height:110px">'
             + "".join(paths) + "</svg>")
 
-
 def _apply_edits(t, data):
     for k in ("beneficiary", "accountCode", "accountName", "description", "method"):
         if data.get(k) is not None:
@@ -214,17 +195,13 @@ def _apply_edits(t, data):
     if data.get("accountCode") in ACCOUNT_CODES and not data.get("accountName"):
         t["accountName"] = ACCOUNT_CODES[data["accountCode"]]
 
-
 def _remember_handled(t):
     STATE["handled"][t["id"]] = t
     if len(STATE["handled"]) > HANDLED_CAP:
         for k in list(STATE["handled"].keys())[:-HANDLED_CAP]:
             STATE["handled"].pop(k, None)
 
-
 def _static_version():
-    """A cache-busting token from the static files' mtime, so a pull + restart
-    serves fresh review.js/css without a manual hard-refresh."""
     v = 0
     for name in ("review.js", "review.css"):
         try:
@@ -233,11 +210,9 @@ def _static_version():
             pass
     return v or 1
 
-
 @app.route("/")
 def index():
     return render_template("review.html", asset_v=_static_version())
-
 
 @app.route("/api/state")
 def api_state():
@@ -250,9 +225,9 @@ def api_state():
         "mission": STATE["mission"],
         "counts": _mission_counts(),
         "cloud": cloud.is_cloud(),
+        "silentPrint": printing.is_available(),
         "queue": [_light(t) for t in _visible()],
     })
-
 
 @app.route("/api/mission", methods=["POST"])
 def api_mission():
@@ -261,7 +236,6 @@ def api_mission():
         return jsonify({"error": "mission must be east or south"}), 400
     STATE["mission"] = m
     return jsonify({"mission": m, "counts": _mission_counts(), "queue": [_light(t) for t in _visible()]})
-
 
 @app.route("/api/similar/<tx_id>")
 def api_similar(tx_id):
@@ -275,7 +249,6 @@ def api_similar(tx_id):
     )
     return jsonify({"matches": matches})
 
-
 @app.route("/api/period", methods=["POST"])
 def api_period():
     raw = (request.json or {}).get("period", "")
@@ -288,7 +261,6 @@ def api_period():
     STATE["period"] = f"{val:03d}"
     return jsonify({"period": STATE["period"]})
 
-
 @app.route("/api/settings")
 def api_get_settings():
     return jsonify({
@@ -296,7 +268,6 @@ def api_get_settings():
         "mysqlDriver": mysql_ledger.driver_available(),
         "balanceMode": settings.balance_mode(),
     })
-
 
 @app.route("/api/settings", methods=["POST"])
 def api_save_settings():
@@ -313,13 +284,11 @@ def api_save_settings():
         mysql_out = settings.mysql_config()
     return jsonify({"ok": True, "mysql": mysql_out, "balanceMode": settings.balance_mode()})
 
-
 @app.route("/api/settings/test-mysql", methods=["POST"])
 def api_test_mysql():
     mysql = (request.json or {}).get("mysql") or {}
     ok, message = mysql_ledger.test_connection(overrides=mysql)
     return jsonify({"ok": ok, "message": message})
-
 
 @app.route("/api/receipt/<tx_id>/<which>")
 def api_receipt(tx_id, which):
@@ -336,14 +305,12 @@ def api_receipt(tx_id, which):
         b64, mime = data_url, "image/jpeg"
     return Response(base64.b64decode(b64), mimetype=mime)
 
-
 @app.route("/api/signature/<tx_id>.svg")
 def api_signature(tx_id):
     t = _find_any(tx_id)
     if not t or not t.get("signature"):
         abort(404)
     return Response(_signature_svg(t["signature"]), mimetype="image/svg+xml")
-
 
 @app.route("/api/zonefund/<tx_id>.pdf")
 def api_zonefund(tx_id):
@@ -352,15 +319,12 @@ def api_zonefund(tx_id):
         abort(404)
     return Response(data, mimetype="application/pdf")
 
-
 @app.route("/api/zonefund/<tx_id>.png")
 def api_zonefund_png(tx_id):
-    """First page of the zone sheet as a PNG — a clean inline thumbnail for review."""
     png = zone_pdf.first_page_png(_zone_pdf_bytes(_find_any(tx_id)))
     if not png:
         abort(404)
     return Response(png, mimetype="image/png")
-
 
 @app.route("/api/approve/<tx_id>", methods=["POST"])
 def api_approve(tx_id):
@@ -375,23 +339,16 @@ def api_approve(tx_id):
     storage.append_csv(t, period)
     rollover = storage.rollover_if_needed()
     mysql_ledger.write(t, period)
-    # Drop any receipts the reviewer chose to leave off the printed record. Storage
-    # never keeps the images, so this only affects what gets printed. Both the
-    # server side render and the print tab fallback read this same copy in memory.
     exclude = set(data.get("excludeReceipts") or [])
     if "main" in exclude:
         t["receiptImage"] = ""
     if "second" in exclude:
         t["secondReceiptImage"] = ""
-    # The reviewer can record a transaction without sending it to the printer
-    # (Shift+Enter / "Approve, no print"). The database writes above still run;
-    # we only skip the printer output and the client-side print-tab fallback.
     no_print = bool(data.get("noPrint"))
     if no_print:
-        printed = True  # nothing was printed, but suppress the print-tab fallback
+        printed = True
     else:
         printed = printing.print_html_async(_render_record_html(t, auto_print=False), tag="record")
-    # A zone-fund transaction also prints its attached sheet on its own full page.
     has_zone = bool(t.get("zoneFund"))
     zone_printed = True
     if not no_print and has_zone:
@@ -400,9 +357,6 @@ def api_approve(tx_id):
     if rollover:
         batch_html = _render_csv_batch_html(rollover, auto_print=False)
         if batch_html:
-            # Save a one-page PDF backup of the 100 archived rows, then also send
-            # it to the printer if this machine can. Either may be unavailable;
-            # the CSV in printed-batches/ is the durable copy regardless.
             printing.save_pdf_async(batch_html, storage.batch_pdf_path(rollover), tag="csvbatch")
             if no_print or printing.print_html_async(batch_html, tag="csvbatch"):
                 rollover = None
@@ -416,7 +370,6 @@ def api_approve(tx_id):
     return jsonify({"ok": True, "rollover": rollover, "printed": printed,
                     "hasZone": has_zone, "zonePrinted": zone_printed})
 
-
 @app.route("/api/delete/<tx_id>", methods=["POST"])
 def api_delete(tx_id):
     t = _find(tx_id)
@@ -429,7 +382,6 @@ def api_delete(tx_id):
         app.logger.warning("cloud delete failed: %s", e)
     STATE["all"] = [x for x in STATE["all"] if x["id"] != t["id"]]
     return jsonify({"ok": True})
-
 
 @app.route("/api/restore", methods=["POST"])
 def api_restore():
@@ -454,23 +406,14 @@ def api_restore():
     return jsonify({"ok": True, "counts": _mission_counts(),
                     "mission": STATE["mission"], "queue": [_light(t) for t in _visible()]})
 
-
-# --- Working fund + dashboard ----------------------------------------------
-# The fund balance = starting amount (per mission+period) minus every
-# transaction. "recorded" mode counts only what is written to the DB; "all" also
-# counts transactions still sitting in the review queue (cloud, not yet logged).
-
 DASH_METHOD_LABELS = {"cash": "Cash", "wave": "Wave", "orange": "Orange Money"}
-
 
 def _arg_mission():
     m = request.args.get("mission") or STATE["mission"]
     return m if m in MISSIONS else STATE["mission"]
 
-
 def _pending_for(mission):
     return [t for t in STATE["all"] if t["mission"] == mission]
-
 
 def _fund_summary(mission, period):
     mode = settings.balance_mode()
@@ -487,7 +430,6 @@ def _fund_summary(mission, period):
         "pendingTotal": pending_total, "pendingCount": len(pending),
         "spent": spent, "remaining": start - spent,
     }
-
 
 def _dashboard_transactions(mission, period):
     txns = []
@@ -508,11 +450,9 @@ def _dashboard_transactions(mission, period):
             })
     return txns
 
-
 @app.route("/api/fund")
 def api_fund():
     return jsonify(_fund_summary(_arg_mission(), request.args.get("period") or STATE["period"]))
-
 
 @app.route("/api/fund", methods=["POST"])
 def api_set_fund():
@@ -528,6 +468,19 @@ def api_set_fund():
         settings.set_balance_mode(data.get("mode"))
     return jsonify(_fund_summary(mission, period))
 
+@app.route("/api/cash")
+def api_get_cash():
+    mission = _arg_mission()
+    period = request.args.get("period") or STATE["period"]
+    return jsonify(settings.get_cash(mission, period))
+
+@app.route("/api/cash", methods=["POST"])
+def api_set_cash():
+    data = request.json or {}
+    mission = data.get("mission") if data.get("mission") in MISSIONS else STATE["mission"]
+    period = data.get("period") or STATE["period"]
+    counts = data.get("counts") if isinstance(data.get("counts"), dict) else {}
+    return jsonify(settings.set_cash(mission, period, counts, data.get("wave"), data.get("orange")))
 
 @app.route("/api/dashboard")
 def api_dashboard():
@@ -580,6 +533,8 @@ def api_dashboard():
         "accountCodes": ACCOUNT_CODES,
         "denominations": prf_export.cash_denominations(),
         "templateReady": prf_export.available(),
+        "silentPrint": printing.is_available(),
+        "cash": settings.get_cash(mission, period),
         "mysql": {
             "enabled": mysql_ledger.is_enabled(),
             "driver": mysql_ledger.driver_available(),
@@ -587,11 +542,9 @@ def api_dashboard():
         },
     })
 
-
 @app.route("/api/query", methods=["POST"])
 def api_query():
     return jsonify(mysql_ledger.run_query((request.json or {}).get("sql", "")))
-
 
 @app.route("/api/transaction/<tx_id>", methods=["POST"])
 def api_update_transaction(tx_id):
@@ -617,13 +570,6 @@ def api_update_transaction(tx_id):
         return jsonify({"error": "nothing to update"}), 400
     return jsonify({"ok": True})
 
-
-# --- Closing a working fund period -----------------------------------------
-# The dashboard's close wizard drives these steps in order: fill a copy of the
-# PRF template (Payment Request totals + Cash Count), open it for printing, bump
-# the fund period (the new one starts at the standard float), and print the
-# closed period's transactions.
-
 def _account_totals(mission, period):
     totals = {}
     for r in storage.list_transactions(mission=mission, period=period):
@@ -632,10 +578,8 @@ def _account_totals(mission, period):
             totals[code] = totals.get(code, 0) + int(r.get("amount") or 0)
     return totals
 
-
 _MONTHS = ["", "JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY",
            "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"]
-
 
 def _period_date_range(mission, period):
     stamps = sorted(s for s in ((r.get("recorded_at") or "").strip()
@@ -654,7 +598,6 @@ def _period_date_range(mission, period):
     if (a.year, a.month, a.day) == (b.year, b.month, b.day):
         return f"{a.day} {_MONTHS[a.month]} {a.year}"
     return f"{a.day} {_MONTHS[a.month]} TO {b.day} {_MONTHS[b.month]} {b.year}"
-
 
 @app.route("/api/close/excel", methods=["POST"])
 def api_close_excel():
@@ -676,10 +619,8 @@ def api_close_excel():
         return jsonify({"error": f"Could not write the Excel file: {e}"}), 500
     return jsonify({"ok": True, **res})
 
-
 @app.route("/api/close/open", methods=["POST"])
 def api_close_open():
-    """Open a generated closure workbook in the OS spreadsheet app for printing."""
     path = (request.json or {}).get("path") or ""
     real = os.path.realpath(path)
     base = os.path.realpath(prf_export.OUTPUT_DIR)
@@ -687,13 +628,12 @@ def api_close_open():
         return jsonify({"error": "That file is not a generated closure."}), 404
     try:
         if hasattr(os, "startfile"):
-            os.startfile(real)              # Windows: opens in Excel
+            os.startfile(real)
         else:
             webbrowser.open("file://" + real)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     return jsonify({"ok": True})
-
 
 @app.route("/api/close/increment", methods=["POST"])
 def api_close_increment():
@@ -707,7 +647,6 @@ def api_close_increment():
     return jsonify({"ok": True, "oldPeriod": f"{int(digits):03d}",
                     "newPeriod": new_period, "newStart": start})
 
-
 @app.route("/api/close/print-transactions", methods=["POST"])
 def api_close_print_transactions():
     data = request.json or {}
@@ -716,7 +655,6 @@ def api_close_print_transactions():
     printed = printing.print_html_async(_render_period_html(mission, period, auto_print=False), tag="period")
     rows = storage.list_transactions(mission=mission, period=period)
     return jsonify({"ok": True, "printed": printed, "count": len(rows)})
-
 
 def _render_period_html(mission, period, auto_print):
     rows = storage.list_transactions(mission=mission, period=period)
@@ -727,20 +665,17 @@ def _render_period_html(mission, period, auto_print):
         date_range=_period_date_range(mission, period) or "—",
         printed_at=datetime.now().strftime("%Y-%m-%d %H:%M"), auto_print=auto_print)
 
-
 @app.route("/print/period/<mission>/<period>")
 def print_period(mission, period):
     if mission not in MISSIONS:
         abort(404)
     return _render_period_html(mission, period, auto_print=True)
 
-
 @app.route("/dashboard")
 def dashboard():
     mission = _arg_mission()
     period = request.args.get("period") or STATE["period"]
     return render_template("dashboard.html", mission=mission, period=period, asset_v=_static_version())
-
 
 def _render_record_html(t, auto_print):
     date_iso, date_fr = "", ""
@@ -766,14 +701,12 @@ def _render_record_html(t, auto_print):
         auto_print=auto_print,
     )
 
-
 @app.route("/print/<tx_id>")
 def print_record(tx_id):
     t = _find_any(tx_id)
     if not t:
         abort(404)
     return _render_record_html(t, auto_print=True)
-
 
 def _render_zone_page_html(t, auto_print):
     pages = zone_pdf.pages_to_png_data_urls(_zone_pdf_bytes(t))
@@ -784,7 +717,6 @@ def _render_zone_page_html(t, auto_print):
     return render_template("zone_page.html", pages=pages, auto_print=auto_print,
                            zone=zf.get("zone", ""), ztype=ztype)
 
-
 @app.route("/print/zone/<tx_id>")
 def print_zone(tx_id):
     t = _find_any(tx_id)
@@ -793,11 +725,9 @@ def print_zone(tx_id):
     html = _render_zone_page_html(t, auto_print=True)
     if html is not None:
         return html
-    # No rasterizer (PyMuPDF missing): serve the raw PDF so it can still be printed by hand.
     if t.get("zoneFund"):
         return redirect(f"/api/zonefund/{tx_id}.pdf")
     abort(404)
-
 
 def _fmt_date(iso):
     if not iso:
@@ -806,7 +736,6 @@ def _fmt_date(iso):
         return datetime.fromisoformat(str(iso).replace("Z", "+00:00")).strftime("%d %b %Y")
     except ValueError:
         return str(iso)[:10]
-
 
 def _render_csv_batch_html(batch_id, auto_print):
     rows = storage.read_batch(batch_id)
@@ -819,7 +748,6 @@ def _render_csv_batch_html(batch_id, auto_print):
                            date_start=_fmt_date(start), date_end=_fmt_date(end),
                            periods=", ".join(periods) or "—")
 
-
 @app.route("/print/csv-batch/<batch_id>")
 def print_csv_batch(batch_id):
     html = _render_csv_batch_html(batch_id, auto_print=True)
@@ -827,10 +755,8 @@ def print_csv_batch(batch_id):
         abort(404)
     return html
 
-
 def _open_browser(port):
     webbrowser.open(f"http://127.0.0.1:{port}/")
-
 
 def _find_free_port(preferred=5000):
     import socket
@@ -844,7 +770,6 @@ def _find_free_port(preferred=5000):
         finally:
             s.close()
     return preferred
-
 
 def main():
     storage.init_db()
@@ -860,7 +785,6 @@ def main():
     print(f"  Open http://127.0.0.1:{port}/  (a browser tab should open automatically)\n")
     threading.Timer(1.0, _open_browser, args=(port,)).start()
     app.run(host="127.0.0.1", port=port, debug=False)
-
 
 if __name__ == "__main__":
     main()

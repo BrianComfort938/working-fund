@@ -109,7 +109,6 @@
     .query-status.ok { color: var(--ok); }
     .result-wrap { margin-top: 12px; overflow-x: auto; max-height: 420px; overflow-y: auto; }
 
-    /* Remaining — cash count */
     .cash-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 9px 26px; }
     @media (max-width: 720px) { .cash-grid { grid-template-columns: 1fr; } }
     .cash-row { display: grid; grid-template-columns: 104px 1fr 116px; gap: 10px; align-items: center; }
@@ -123,8 +122,10 @@
     .cash-mobile input { width: 170px; }
     .cash-total { margin-top: 14px; display: flex; justify-content: flex-end; align-items: baseline; gap: 10px; font-size: 14px; }
     .cash-total b { font-family: var(--mono); font-size: 19px; }
+    .cash-saved { margin-top: 6px; text-align: right; font-size: 11.5px; color: var(--muted); }
+    #wizCashMount .cash-grid { grid-template-columns: 1fr; }
+    #wizCashMount .cash-mobile input { width: 140px; }
 
-    /* Sticky discrepancy bar */
     .discrepancy-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; background: var(--panel); border-top: 2px solid var(--border-strong); box-shadow: 0 -2px 12px rgba(20,33,42,.09); }
     .disc-inner { max-width: 1100px; margin: 0 auto; padding: 10px 22px; display: flex; align-items: center; gap: 22px; flex-wrap: wrap; }
     .disc-item { display: flex; flex-direction: column; gap: 1px; }
@@ -134,7 +135,6 @@
     .disc-v.ok { color: var(--ok); } .disc-v.bad { color: var(--danger); }
     .disc-sep { width: 1px; align-self: stretch; min-height: 30px; background: var(--border); }
 
-    /* Possible duplicates */
     .dup-row { display: grid; grid-template-columns: 74px 1fr 1fr; gap: 6px 16px; align-items: start; padding: 11px 0; border-top: 1px solid var(--border); }
     .dup-row:first-child { border-top: none; }
     .dup-badge { font-size: 10px; font-weight: 500; text-transform: none; letter-spacing: .03em; padding: 3px 0; border-radius: 10px; text-align: center; }
@@ -145,7 +145,6 @@
     .dup-side .meta { color: var(--muted); font-size: 11.5px; }
     .dup-reasons { grid-column: 2 / -1; font-size: 11.5px; color: var(--muted); }
 
-    /* Close wizard */
     .modal-card.wizard { max-width: 580px; }
     .wiz-steps { display: flex; gap: 6px; flex-wrap: wrap; }
     .wiz-chip { font-size: 10.5px; font-weight: 500; padding: 4px 10px; border-radius: 999px; background: var(--panel-alt); border: 1px solid var(--border); color: var(--muted); white-space: nowrap; }
@@ -160,7 +159,7 @@
     .log-line { display: flex; gap: 8px; align-items: baseline; padding: 6px 0; border-top: 1px solid var(--border); font-size: 13px; }
     .log-line:first-child { border-top: none; }
     .log-line .tick { color: var(--ok); font-weight: 500; }
-  </style>
+</style>
 </head>
 
 <body>
@@ -179,7 +178,6 @@
       <button type="button" class="tab" id="tabBtnTx" role="tab" aria-selected="false">Transactions</button>
     </div>
 
-    <!-- OVERVIEW -->
     <section id="tabOverview">
       <div id="cards" class="cards" style="margin-bottom:20px"></div>
 
@@ -221,7 +219,6 @@
       </div>
     </section>
 
-    <!-- TRANSACTIONS -->
     <section id="tabTransactions" class="hidden">
       <div class="panel" style="margin-bottom:20px">
         <div class="panel-head">
@@ -323,7 +320,6 @@
         return d.toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
       }
 
-      // ---- Cards (with editable starting value) ----
       let editingStart = false;
       function renderCards() {
         const s = DATA.summary;
@@ -366,7 +362,6 @@
         } catch (e) { toast("Save failed", "err"); }
       }
 
-      // ---- Charts (one at a time) ----
       function currentChartItems() {
         return (DATA[$("chartData").value] || []).slice(0, 10);
       }
@@ -423,7 +418,6 @@
         }).join("");
         return `<div class="pie-wrap"><svg viewBox="0 0 240 240" width="240" height="240">${paths}</svg><div class="pie-legend">${legend}</div></div>`;
       }
-      // ---- Location heatmap (Leaflet + leaflet.heat, loaded on demand) ----
       let heatMap = null, leafletLoading = null;
       function ensureLeaflet() {
         if (window.L && window.L.heatLayer) return Promise.resolve();
@@ -455,7 +449,7 @@
         }
         area.innerHTML = `<div id="heatMap" class="heat-map"></div>`;
         ensureLeaflet().then(() => {
-          if ($("chartData").value !== "byLocation") return;   // user switched away while it loaded
+          if ($("chartData").value !== "byLocation") return;
           const el = $("heatMap");
           if (!el) return;
           if (heatMap) { try { heatMap.remove(); } catch (_) {} heatMap = null; }
@@ -475,7 +469,6 @@
         });
       }
 
-      // ---- Locations ----
       function renderLocations() {
         const el = $("locations"), locs = DATA.locations || [];
         if (!locs.length) { el.innerHTML = `<div class="empty-note">No transactions have a saved location yet.</div>`; return; }
@@ -487,62 +480,85 @@
         }).join("") + `</div>`;
       }
 
-      // ---- Remaining: cash count + live discrepancy ----
-      // The counted remaining and the running difference persist per mission+period
-      // in localStorage so the reviewer can leave, recalculate, and come back.
-      const cashKey = () => `wf_cash_${MISSION}_${PERIOD}`;
-      function loadCash() { try { const c = JSON.parse(localStorage.getItem(cashKey()) || "{}"); c.counts = c.counts || {}; return c; } catch (_) { return { counts: {} }; } }
-      let cash = loadCash();
-      const saveCash = () => localStorage.setItem(cashKey(), JSON.stringify(cash));
-      const denoms = () => DATA.denominations || [];
+      let cash = { counts: {}, wave: 0, orange: 0, updatedAt: "" };
+      let cashSaveTimer = null;
+      function setCash(c) {
+        cash = { counts: (c && c.counts) || {}, wave: (c && c.wave) || 0, orange: (c && c.orange) || 0, updatedAt: (c && c.updatedAt) || "" };
+      }
+      function saveCash() {
+        if (cashSaveTimer) clearTimeout(cashSaveTimer);
+        cashSaveTimer = setTimeout(async () => {
+          try {
+            const res = await api("/api/cash", { method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ mission: MISSION, period: PERIOD, counts: cash.counts, wave: cash.wave || 0, orange: cash.orange || 0 }) });
+            cash.updatedAt = res.updatedAt || cash.updatedAt;
+            updateCashSaved();
+          } catch (_) {}
+        }, 500);
+      }
+      const denoms = () => (DATA && DATA.denominations) || [];
       const countedCash = () => denoms().reduce((s, d) => s + (parseInt(cash.counts[d.row], 10) || 0) * d.value, 0);
       const countedTotal = () => countedCash() + (parseInt(cash.wave, 10) || 0) + (parseInt(cash.orange, 10) || 0);
+      function fmtSaved(iso) {
+        if (!iso) return "Not saved yet";
+        const d = new Date(iso);
+        if (isNaN(d)) return "Last changed " + iso;
+        return "Last changed " + d.toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+      }
+      function updateCashSaved() {
+        ["ovCashSaved", "wzCashSaved"].forEach((id) => { const el = document.getElementById(id); if (el) el.textContent = fmtSaved(cash.updatedAt); });
+      }
 
-      function renderCashCount() {
-        const el = $("cashCount");
-        if (!el) return;
-        if (!denoms().length) { el.innerHTML = `<div class="empty-note">Cash Count denominations unavailable — put PRF_Template.xlsx in the local/ folder.</div>`; return; }
+      function cashUiHtml(pfx) {
         const rowsHtml = denoms().map((d) => {
           const q = cash.counts[d.row];
           const qv = q ? groupDigits(String(parseInt(q, 10) || 0)) : "";
           return `<div class="cash-row"><span class="denom">${groupDigits(d.value)}<span class="kind">${esc(d.kind)}</span></span>` +
             `<input inputmode="numeric" data-row="${d.row}" value="${esc(qv)}" placeholder="0">` +
-            `<span class="line" id="cline_${d.row}">${esc(xof((parseInt(q, 10) || 0) * d.value))}</span></div>`;
+            `<span class="line" id="${pfx}_line_${d.row}">${esc(xof((parseInt(q, 10) || 0) * d.value))}</span></div>`;
         }).join("");
-        el.innerHTML = `<div class="cash-grid">${rowsHtml}</div>` +
+        return `<div class="cash-grid">${rowsHtml}</div>` +
           `<div class="cash-mobile">` +
-            `<label><span>Wave</span><input id="cashWave" inputmode="numeric" value="${esc(cash.wave ? groupDigits(String(parseInt(cash.wave, 10))) : "")}" placeholder="0"></label>` +
-            `<label><span>Orange Money</span><input id="cashOrange" inputmode="numeric" value="${esc(cash.orange ? groupDigits(String(parseInt(cash.orange, 10))) : "")}" placeholder="0"></label>` +
+            `<label><span>Wave</span><input id="${pfx}_wave" inputmode="numeric" value="${esc(cash.wave ? groupDigits(String(parseInt(cash.wave, 10))) : "")}" placeholder="0"></label>` +
+            `<label><span>Orange Money</span><input id="${pfx}_orange" inputmode="numeric" value="${esc(cash.orange ? groupDigits(String(parseInt(cash.orange, 10))) : "")}" placeholder="0"></label>` +
           `</div>` +
-          `<div class="cash-total">Counted remaining <b id="cashTotal">${esc(xof(countedTotal()))}</b></div>`;
-        el.querySelectorAll(".cash-row input").forEach((inp) => inp.addEventListener("input", onCashInput));
-        $("cashWave").addEventListener("input", onMobileInput);
-        $("cashOrange").addEventListener("input", onMobileInput);
+          `<div class="cash-total">Counted remaining <b id="${pfx}_total">${esc(xof(countedTotal()))}</b></div>`;
       }
-      function onCashInput(e) {
-        const row = e.target.dataset.row;
-        const v = parseInt((e.target.value || "").replace(/\D/g, ""), 10);
-        e.target.value = isNaN(v) ? "" : groupDigits(v);
-        cash.counts[row] = isNaN(v) ? 0 : v;
-        saveCash();
-        const d = denoms().find((x) => String(x.row) === String(row));
-        if (d) $("cline_" + row).textContent = xof((cash.counts[row] || 0) * d.value);
-        $("cashTotal").textContent = xof(countedTotal());
-        updateDiscrepancy();
+      function wireCashUi(mount, pfx, onChange) {
+        const refreshTotal = () => { const t = $(pfx + "_total"); if (t) t.textContent = xof(countedTotal()); };
+        mount.querySelectorAll(".cash-row input").forEach((inp) => inp.addEventListener("input", (e) => {
+          const row = e.target.dataset.row;
+          const v = parseInt((e.target.value || "").replace(/\D/g, ""), 10);
+          e.target.value = isNaN(v) ? "" : groupDigits(v);
+          cash.counts[row] = isNaN(v) ? 0 : v;
+          const d = denoms().find((x) => String(x.row) === String(row));
+          const line = $(pfx + "_line_" + row);
+          if (d && line) line.textContent = xof((cash.counts[row] || 0) * d.value);
+          refreshTotal(); saveCash(); if (onChange) onChange();
+        }));
+        const onMobile = (e, key) => {
+          const v = parseInt((e.target.value || "").replace(/\D/g, ""), 10);
+          e.target.value = isNaN(v) ? "" : groupDigits(v);
+          cash[key] = isNaN(v) ? 0 : v;
+          refreshTotal(); saveCash(); if (onChange) onChange();
+        };
+        const w = $(pfx + "_wave"), o = $(pfx + "_orange");
+        if (w) w.addEventListener("input", (e) => onMobile(e, "wave"));
+        if (o) o.addEventListener("input", (e) => onMobile(e, "orange"));
       }
-      function onMobileInput(e) {
-        const v = parseInt((e.target.value || "").replace(/\D/g, ""), 10);
-        e.target.value = isNaN(v) ? "" : groupDigits(v);
-        cash[e.target.id === "cashWave" ? "wave" : "orange"] = isNaN(v) ? 0 : v;
-        saveCash();
-        $("cashTotal").textContent = xof(countedTotal());
-        updateDiscrepancy();
+
+      function renderCashCount() {
+        const el = $("cashCount");
+        if (!el) return;
+        if (!denoms().length) { el.innerHTML = `<div class="empty-note">Cash Count denominations unavailable — put PRF_Template.xlsx in the local/ folder.</div>`; return; }
+        el.innerHTML = cashUiHtml("ov") + `<div class="cash-saved" id="ovCashSaved">${esc(fmtSaved(cash.updatedAt))}</div>`;
+        wireCashUi(el, "ov", updateDiscrepancy);
       }
       function updateDiscrepancy() {
         if (!DATA || !DATA.summary) return;
         const s = DATA.summary;
         const start = s.start || 0, spent = s.recordedTotal || 0, counted = countedTotal();
-        const diff = counted - (start - spent);   // 0 when the fund reconciles
+        const diff = counted - (start - spent);
         $("discStart").textContent = xof(start);
         $("discSpent").textContent = xof(spent);
         $("discCounted").textContent = xof(counted);
@@ -552,7 +568,6 @@
       }
       function showDiscrepancyBar(show) { $("discrepancyBar").classList.toggle("hidden", !show); }
 
-      // ---- Possible duplicates (ranked most→least likely) ----
       const DUP_STOP = new Set(["elder", "elders", "soeur", "soeurs", "sister", "sisters", "frere", "freres", "brother", "president", "pres", "pdt", "mr", "mrs", "ms", "mme", "m", "dr"]);
       function normTokens(s) {
         s = String(s == null ? "" : s).toLowerCase();
@@ -566,7 +581,7 @@
         for (let i = 0; i < items.length; i++) {
           for (let j = i + 1; j < items.length; j++) {
             const a = items[i], b = items[j];
-            if ((a.t.amount || 0) !== (b.t.amount || 0)) continue;   // duplicates share the amount
+            if ((a.t.amount || 0) !== (b.t.amount || 0)) continue;
             let shared = 0; a.tok.forEach((x) => { if (b.tok.has(x)) shared++; });
             const sameAcct = a.t.account_code && a.t.account_code === b.t.account_code;
             const sameDay = a.day && a.day === b.day;
@@ -576,7 +591,7 @@
             if (sameAcct) score += 2;
             if (sameDay) score += 1;
             if (sameDesc) score += 2;
-            if (score < 2) continue;                                 // needs more than just the amount
+            if (score < 2) continue;
             out.push({ a: a.t, b: b.t, score, reasons: [shared ? "same name" : null, sameAcct ? "same account" : null, sameDesc ? "same description" : null, sameDay ? "same day" : null].filter(Boolean) });
           }
         }
@@ -599,9 +614,9 @@
         }).join("");
       }
 
-      // ---- Close working fund wizard (forward-only: Next … Closed) ----
       const closeState = { step: 0, running: false, retry: false, excel: null, newPeriod: null, log: [] };
       const WIZ = [
+        { chip: "Cash count", run: wizCash },
         { chip: "Update Excel", run: wizExcel },
         { chip: "Open & print", run: wizOpen },
         { chip: "New period", run: wizIncrement },
@@ -644,6 +659,22 @@
         if (closeState.step >= WIZ.length - 1) { finishClose(); return; }
         closeState.step++; renderWizard(); await runStep();
       }
+      function wizCash() {
+        if (!denoms().length) {
+          wizBodyHtml(`<h3>1. Cash count</h3>` +
+            `<p class="wiz-status err">Cash Count denominations aren't available — put PRF_Template.xlsx in the local/ folder. You can still press Next to continue.</p>`);
+          return;
+        }
+        wizBodyHtml(`<h3>1. Cash count — count the money on hand</h3>` +
+          `<p>Enter the cash and mobile money on hand for <b>${titleCase(MISSION)} WF ${esc(PERIOD)}</b>. ` +
+          `It saves on this computer automatically and fills the Cash Count sheet in the next step.</p>` +
+          `<div id="wizCashMount"></div>` +
+          `<div class="cash-saved" id="wzCashSaved">${esc(fmtSaved(cash.updatedAt))}</div>` +
+          `<p class="wiz-status">Press Next when the count is right.</p>`);
+        const mount = $("wizCashMount");
+        mount.innerHTML = cashUiHtml("wz");
+        wireCashUi(mount, "wz", updateDiscrepancy);
+      }
       async function wizExcel() {
         const body = { mission: MISSION, period: PERIOD, cash: cash.counts, wave: parseInt(cash.wave, 10) || 0, orange: parseInt(cash.orange, 10) || 0 };
         const res = await api("/api/close/excel", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -652,7 +683,7 @@
         logAdd(`Updated the Excel: ${res.name} — ${res.written.length} account line(s), counted ${xof(res.countedTotal)}`);
         const lines = (res.written || []).map((w) => `<li>${esc(w.name)} → <b>${esc(xof(w.total))}</b></li>`).join("");
         const un = (res.unmapped || []).length ? `<p class="wiz-status err">${res.unmapped.length} account(s) had no free row on the form.</p>` : "";
-        wizBodyHtml(`<h3>1. Payment Request + Cash Count updated</h3>` +
+        wizBodyHtml(`<h3>2. Payment Request + Cash Count updated</h3>` +
           `<p>Wrote <code>closures/${esc(res.name)}</code>.</p>` +
           `<ul>${lines || "<li>No account spending recorded this period.</li>"}</ul>` +
           `<p>Cash Count: counted remaining <b>${esc(xof(res.countedTotal))}</b> ` +
@@ -663,7 +694,7 @@
         const res = await api("/api/close/open", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path: closeState.excel && closeState.excel.path }) });
         if (res.error) throw new Error(res.error);
         logAdd("Opened the Excel file on this computer for printing");
-        wizBodyHtml(`<h3>2. Excel opened — print it</h3>` +
+        wizBodyHtml(`<h3>3. Excel opened — print it</h3>` +
           `<p>The workbook opened in Excel. Print it now (<kbd>Ctrl</kbd>+<kbd>P</kbd>) — the Payment Request and the Cash Count pages.</p>` +
           `<p>This review stays open, so you can recalculate: change the cash count above, reopen this wizard, and a fresh file is written.</p>`);
       }
@@ -673,21 +704,27 @@
         closeState.newPeriod = res.newPeriod;
         localStorage.setItem("workingfund_period", res.newPeriod);
         logAdd(`Advanced the fund period ${res.oldPeriod} → ${res.newPeriod} (new start ${xof(res.newStart)})`);
-        wizBodyHtml(`<h3>3. New working fund period</h3>` +
+        wizBodyHtml(`<h3>4. New working fund period</h3>` +
           `<p>Advanced <b>WF ${esc(res.oldPeriod)}</b> → <b>WF ${esc(res.newPeriod)}</b>.</p>` +
           `<p>The new period starts at the standard float <b>${esc(xof(res.newStart))}</b>.</p>`);
       }
       async function wizPrintTx() {
-        const res = await api("/api/close/print-transactions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mission: MISSION, period: PERIOD }) });
-        if (res.error) throw new Error(res.error);
-        if (!res.printed) window.open(`/print/period/${encodeURIComponent(MISSION)}/${encodeURIComponent(PERIOD)}`, "_blank");
-        logAdd(`Printed ${res.count} transaction(s) from WF ${PERIOD} on paper`);
-        wizBodyHtml(`<h3>4. Printed the period's transactions</h3>` +
-          `<p>${res.printed ? "Sent" : "Opened a print tab for"} <b>${res.count}</b> transaction(s) from WF ${esc(PERIOD)} to the printer.</p>`);
+        const url = `/print/period/${encodeURIComponent(MISSION)}/${encodeURIComponent(PERIOD)}`;
+        const win = (DATA && DATA.silentPrint) ? null : window.open("", "_blank");
+        try {
+          const res = await api("/api/close/print-transactions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mission: MISSION, period: PERIOD }) });
+          if (res.error) throw new Error(res.error);
+          if (res.printed) { if (win && !win.closed) win.close(); }
+          else if (win && !win.closed) win.location.href = url;
+          else window.open(url, "_blank");
+          logAdd(`Printed ${res.count} transaction(s) from WF ${PERIOD} on paper`);
+          wizBodyHtml(`<h3>5. Printed the period's transactions</h3>` +
+            `<p>${res.printed ? "Sent" : "Opened a print tab for"} <b>${res.count}</b> transaction(s) from WF ${esc(PERIOD)} to the printer.</p>`);
+        } catch (e) { if (win && !win.closed) win.close(); throw e; }
       }
       function wizDone() {
         const items = closeState.log.map((l) => `<div class="log-line"><span class="tick">✓</span><span>${esc(l)}</span></div>`).join("");
-        wizBodyHtml(`<h3>5. Working fund closed</h3><p>Everything the portal did:</p>${items}` +
+        wizBodyHtml(`<h3>6. Working fund closed</h3><p>Everything the portal did:</p>${items}` +
           `<p class="wiz-status">Press <b>Closed</b> to finish and open the new period.</p>`);
       }
       function finishClose() {
@@ -695,12 +732,10 @@
         closeWizard();
         toast("Working fund closed", "ok");
         if (p) {
-          localStorage.removeItem(cashKey());
           window.location.href = `/dashboard?mission=${encodeURIComponent(MISSION)}&period=${encodeURIComponent(p)}`;
         } else { load(); }
       }
 
-      // ---- Transactions grid (filter + inline edit of recorded rows) ----
       function accountOptions(sel) {
         return `<option value="">(none)</option>` + Object.keys(DATA.accountCodes).sort().map((c) =>
           `<option value="${c}" ${c === sel ? "selected" : ""}>${esc(c + "  " + DATA.accountCodes[c])}</option>`).join("");
@@ -767,7 +802,6 @@
         } catch (e) { toast("Save failed", "err"); }
       }
 
-      // ---- MySQL query console ----
       function defaultQuery() {
         const tbl = (DATA.mysql && DATA.mysql.table) || "transactions_2025";
         return "SELECT beneficiary, account, amount, method, date\nFROM `" + tbl + "`\nORDER BY date DESC\nLIMIT 100;";
@@ -793,7 +827,6 @@
         } catch (e) { status.className = "query-status err"; status.textContent = "Query failed."; }
       }
 
-      // ---- Tabs ----
       function selectTab(which) {
         const ov = which === "overview";
         $("tabBtnOverview").setAttribute("aria-selected", String(ov));
@@ -821,7 +854,11 @@
         showDiscrepancyBar(!$("tabOverview").classList.contains("hidden"));
       }
       async function load() {
-        try { DATA = await api(`/api/dashboard?mission=${encodeURIComponent(MISSION)}&period=${encodeURIComponent(PERIOD)}`); render(); }
+        try {
+          DATA = await api(`/api/dashboard?mission=${encodeURIComponent(MISSION)}&period=${encodeURIComponent(PERIOD)}`);
+          setCash(DATA.cash);
+          render();
+        }
         catch (e) { $("cards").innerHTML = `<div class="empty-note">Could not load the dashboard.</div>`; }
       }
 
@@ -838,7 +875,7 @@
       $("closeModal").addEventListener("click", (e) => { if (e.target.id === "closeModal") closeWizard(); });
       load();
     })();
-  </script>
+</script>
 </body>
 
 </html>

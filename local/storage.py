@@ -17,11 +17,9 @@ CSV_FIELDS = [
     "description", "amount", "currency", "method", "signed", "transaction_id",
 ]
 
-
 def _ensure_dirs():
     os.makedirs(RECEIPTS_DIR, exist_ok=True)
     os.makedirs(BATCH_DIR, exist_ok=True)
-
 
 def init_db():
     _ensure_dirs()
@@ -34,14 +32,11 @@ def init_db():
             amount INTEGER, currency TEXT, method TEXT,
             signed INTEGER, transaction_id TEXT, logged_at TEXT, location TEXT)"""
     )
-    # Databases created before the dashboard predate the location column; add it
-    # in place so the working-fund map can plot recorded transactions too.
     cols = [r[1] for r in con.execute("PRAGMA table_info(transactions)")]
     if "location" not in cols:
         con.execute("ALTER TABLE transactions ADD COLUMN location TEXT")
     con.commit()
     con.close()
-
 
 def _row_from_tx(tx, fund_period):
     return {
@@ -58,7 +53,6 @@ def _row_from_tx(tx, fund_period):
         "signed": 1 if tx.get("signature") else 0,
         "transaction_id": tx.get("id", ""),
     }
-
 
 def write_sqlite(tx, fund_period):
     init_db()
@@ -79,7 +73,6 @@ def write_sqlite(tx, fund_period):
     con.commit()
     con.close()
 
-
 def append_csv(tx, fund_period):
     _ensure_dirs()
     new_file = not os.path.exists(CSV_PATH)
@@ -89,13 +82,11 @@ def append_csv(tx, fund_period):
             w.writeheader()
         w.writerow(_row_from_tx(tx, fund_period))
 
-
 def _read_csv_rows():
     if not os.path.exists(CSV_PATH):
         return []
     with open(CSV_PATH, newline="", encoding="utf-8") as f:
         return list(csv.DictReader(f))
-
 
 def rollover_if_needed():
     rows = _read_csv_rows()
@@ -114,7 +105,6 @@ def rollover_if_needed():
         w.writerows(remaining)
     return batch_id
 
-
 def read_batch(batch_id):
     path = os.path.join(BATCH_DIR, f"batch-{batch_id}.csv")
     if not os.path.exists(path):
@@ -122,22 +112,14 @@ def read_batch(batch_id):
     with open(path, newline="", encoding="utf-8") as f:
         return list(csv.DictReader(f))
 
-
 def batch_pdf_path(batch_id):
     return os.path.join(BATCH_DIR, f"batch-{batch_id}.pdf")
 
-
 def batch_date_range(rows):
-    """Earliest and latest recorded_at in a batch, as raw ISO strings ("" if none).
-
-    ISO-8601 timestamps sort chronologically as plain strings, so a lexical
-    min/max is enough to find the span of the 100 archived entries.
-    """
     stamps = sorted(s for s in ((r.get("recorded_at") or "").strip() for r in rows) if s)
     if not stamps:
         return "", ""
     return stamps[0], stamps[-1]
-
 
 def save_receipt(tx_id, data_url, which):
     if not data_url:
@@ -157,7 +139,6 @@ def save_receipt(tx_id, data_url, which):
         f.write(base64.b64decode(b64))
     return fname
 
-
 def delete_receipts(tx_id):
     if not tx_id:
         return
@@ -169,7 +150,6 @@ def delete_receipts(tx_id):
                 os.remove(p)
             except OSError:
                 pass
-
 
 def remove_transaction(tx_id):
     if not tx_id:
@@ -197,13 +177,11 @@ def remove_transaction(tx_id):
             except OSError:
                 pass
 
-
 NAME_STOPWORDS = {
     "elder", "elders", "soeur", "soeurs", "sister", "sisters",
     "frere", "frère", "freres", "frères", "brother", "brothers",
     "president", "président", "pres", "pdt", "mr", "mrs", "ms", "mme", "m", "dr",
 }
-
 
 def _name_tokens(name):
     s = (name or "").lower()
@@ -212,7 +190,6 @@ def _name_tokens(name):
     s = "".join(repl.get(ch, ch) for ch in s)
     toks = [t for t in "".join(c if c.isalnum() else " " for c in s).split() if t]
     return [t for t in toks if t not in NAME_STOPWORDS]
-
 
 def _all_rows():
     rows = []
@@ -237,7 +214,6 @@ def _all_rows():
             continue
         rows.append(r)
     return rows
-
 
 def find_similar(beneficiary, amount, exclude_id="", limit=8, amount_tolerance=0):
     want_tokens = set(_name_tokens(beneficiary))
@@ -283,10 +259,7 @@ def find_similar(beneficiary, amount, exclude_id="", limit=8, amount_tolerance=0
             break
     return out
 
-
 def list_transactions(mission=None, period=None):
-    """Recorded transactions from SQLite, newest first, optionally filtered by
-    mission and fund period. `location` is parsed back into a dict (or None)."""
     out = []
     try:
         con = sqlite3.connect(DB_PATH)
@@ -319,16 +292,10 @@ def list_transactions(mission=None, period=None):
         pass
     return out
 
-
-# Columns the dashboard is allowed to edit. Names are a fixed whitelist so they
-# can be interpolated into the UPDATE statement safely (values stay parameterized).
 _EDITABLE_TEXT = ("beneficiary", "account_code", "account_name", "description",
                   "method", "mission", "recorded_at", "fund_period")
 
-
 def update_transaction(tx_id, fields):
-    """Edit a recorded transaction in SQLite and the CSV backup. Returns True if
-    anything changed. The MySQL mirror is append-only and is not updated here."""
     if not tx_id or not isinstance(fields, dict):
         return False
     sets = {}
@@ -367,7 +334,6 @@ def update_transaction(tx_id, fields):
             w.writeheader()
             w.writerows(rows)
     return True
-
 
 def save_signature(tx_id, sig):
     if not sig or not sig.get("s"):
