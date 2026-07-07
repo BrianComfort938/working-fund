@@ -507,7 +507,7 @@
       } else if (fig) {
         const zf = t.zoneFund || {};
         fig.innerHTML = `<figcaption>Zone fund</figcaption>` +
-          `<div class="zone-error">${esc((zf.zone || "") + " " + (zf.type === "sante" ? "Health" : "Transport"))} — couldn't load the sheet. Check it is shared &ldquo;anyone with the link&rdquo;.</div>`;
+          `<div class="zone-error">${esc((zf.zone || "") + " " + (zf.type === "sante" ? "Health" : "Transport"))}, could not load the sheet. Check it is shared &ldquo;anyone with the link&rdquo;.</div>`;
       }
     }, { once: true });
 
@@ -737,8 +737,8 @@
       `<span class="fund-mode">${f.mode === "all" ? "+ in review" : "recorded"}</span></span>` +
       `<span class="fund-remaining ${neg ? "neg" : ""}">${groupDigits(Math.abs(f.remaining))}` +
       `<span class="fund-cur">XOF${neg ? " over" : ""}</span></span>` +
-      `<span class="fund-detail"><span>Start <b>${groupDigits(f.start)}</b></span>` +
-      `<span>Spent <b>${groupDigits(f.spent)}</b></span></span>` +
+      `<span class="fund-detail"><span>Start ${groupDigits(f.start)}</span>` +
+      `<span>Spent ${groupDigits(f.spent)}</span></span>` +
       `<span class="fund-foot">${f.recordedCount} recorded` +
       `${f.mode === "all" && f.pendingCount ? " &middot; " + f.pendingCount + " in review" : ""} &middot; tap to open</span>`;
   }

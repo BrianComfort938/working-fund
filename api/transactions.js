@@ -1,7 +1,6 @@
 const { Binary } = require("mongodb");
 const { getDb } = require("./_lib/db");
 const { withCors, readBody } = require("./_lib/cors");
-const { fetchZonePdf } = require("./_lib/zones");
 
 const SHEET_ID_RE = /^[A-Za-z0-9_-]{20,}$/;
 
@@ -74,14 +73,11 @@ module.exports = async (req, res) => {
       const zf = cleanZoneFund(body.zoneFund);
       if (zf) {
         doc.zoneFund = zf;
-        const pdf = await fetchZonePdf(zf.sheetId, zf.type);
-        if (pdf) {
-          doc.zoneFundPdf = new Binary(pdf.buffer);
-          doc.zoneFund.gid = pdf.gid;
-          doc.zoneFund.fetchedAt = new Date();
-        } else {
-          doc.zoneFund.pdfError = true;
-        }
+        // The phone pre-fetches the sheet (async, when the zone fund is added) and
+        // sends it here, so the POST never blocks on Google. If it isn't ready the
+        // record keeps just the reference and the review portal fetches on demand.
+        const pdf = toBinary(body.zoneFundPdf);
+        if (pdf) doc.zoneFundPdf = pdf;
       }
       const r = await col.insertOne(doc);
       return res.status(201).json({ _id: r.insertedId, zoneFundPdf: !!doc.zoneFundPdf });
