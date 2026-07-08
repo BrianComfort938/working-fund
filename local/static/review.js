@@ -76,6 +76,7 @@
     const s = await api("/api/state");
     state.period = s.period;
     state.cloud = s.cloud;
+    state.demoReason = s.demoReason || "";
     state.counts = s.counts || { east: 0, south: 0 };
     $("period").value = s.period;
     // The server keeps the fund period only in memory (it resets to 000 when the
@@ -119,7 +120,16 @@
     toast("Mission: " + titleCase(state.mission), "ok");
   }
 
+  function renderDemoBanner() {
+    const el = $("demoBanner");
+    if (!el) return;
+    if (state.cloud) { el.classList.add("hidden"); el.textContent = ""; return; }
+    el.textContent = "Demo data. " + (state.demoReason || "Not connected to the cloud.");
+    el.classList.remove("hidden");
+  }
+
   function renderAll() {
+    renderDemoBanner();
     $("cntEast").textContent = state.counts.east || 0;
     $("cntSouth").textContent = state.counts.south || 0;
     document.querySelectorAll(".mission-tab").forEach((b) =>

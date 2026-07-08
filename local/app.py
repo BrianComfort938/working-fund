@@ -250,6 +250,7 @@ def api_state():
         "mission": STATE["mission"],
         "counts": _mission_counts(),
         "cloud": cloud.is_cloud(),
+        "demoReason": cloud.demo_reason(),
         "queue": [_light(t) for t in _visible()],
     })
 
@@ -852,9 +853,9 @@ def main():
     printing.warm_up()
     port = _find_free_port(5000)
     counts = _mission_counts()
+    tail = "" if cloud.is_cloud() else ("\n  Showing DEMO data. Reason: " + cloud.demo_reason())
     print(f"\n  Working Fund review: {len(STATE['all'])} transaction(s) "
-          f"(East {counts['east']}, South {counts['south']}). "
-          f"{'(DEMO data)' if not cloud.is_cloud() else ''}")
+          f"(East {counts['east']}, South {counts['south']}).{tail}")
     if port != 5000:
         print(f"  (Port 5000 was busy, so using {port} instead.)")
     print(f"  Open http://127.0.0.1:{port}/  (a browser tab should open automatically)\n")
