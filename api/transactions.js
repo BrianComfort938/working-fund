@@ -67,15 +67,9 @@ module.exports = async (req, res) => {
         createdAt: new Date(),
         logged: false,
       };
-      // Zone fund: the phone sends only {zone, sheetId, type}; fetch that tab as a
-      // PDF from the (link-shared) Google Sheet and store it on the record. If the
-      // fetch fails the transaction is still saved, flagged so the office can retry.
       const zf = cleanZoneFund(body.zoneFund);
       if (zf) {
         doc.zoneFund = zf;
-        // The phone pre-fetches the sheet (async, when the zone fund is added) and
-        // sends it here, so the POST never blocks on Google. If it isn't ready the
-        // record keeps just the reference and the review portal fetches on demand.
         const pdf = toBinary(body.zoneFundPdf);
         if (pdf) doc.zoneFundPdf = pdf;
       }

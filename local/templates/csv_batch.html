@@ -5,11 +5,6 @@
     <meta charset="utf-8">
     <title>CSV Backup {{ batch_id }}</title>
     <style>
-        /* Zero page margin; the body padding below provides the visible margin.
-           This keeps the layout identical whether the sheet is printed by the
-           browser, the silent kiosk printer, or rendered to a one-page PDF.
-           The body is a fixed A4-ish width so its measured height (used to
-           auto-scale the PDF onto a single page) is deterministic. */
         @page { size: A4; margin: 0; }
 
         * { box-sizing: border-box; }
@@ -47,12 +42,12 @@
         }
         td.amt, th.amt { text-align: right; font-variant-numeric: tabular-nums; }
         tbody tr:nth-child(even) td { background: #f6f8f9; }
-    </style>
+</style>
 </head>
 
 <body>
     <div class="hd">
-        <h1>Working Fund &mdash; Transaction Backup</h1>
+        <h1>Working Fund - Transaction Backup</h1>
         <div class="meta">
             Batch {{ batch_id }}<br>
             WF period {{ periods }}
@@ -104,7 +99,7 @@
     {% if auto_print %}<script>
         window.addEventListener('load', function () { setTimeout(function () { window.print(); }, 300); });
         window.addEventListener('afterprint', function () { window.close(); });
-    </script>{% endif %}
+</script>{% endif %}
 </body>
 
 </html>

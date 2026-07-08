@@ -10,10 +10,8 @@ try:
 except Exception:
     _cfg = None
 
-
 def _get(name, default=None):
     return getattr(_cfg, name, default) if _cfg else default
-
 
 def _selenium_present():
     try:
@@ -22,14 +20,11 @@ def _selenium_present():
     except Exception:
         return False
 
-
 def is_enabled():
-    return bool(_get("PRINTING_ENABLED", True))
-
+    return bool(_get("PRINT_SILENT", False))
 
 _capable = None
 _capable_lock = threading.Lock()
-
 
 def _probe():
     driver = None
@@ -46,7 +41,6 @@ def _probe():
             except Exception:
                 pass
 
-
 def is_available():
     global _capable
     if not is_enabled() or not _selenium_present():
@@ -56,11 +50,9 @@ def is_available():
             _capable = _probe()
         return _capable
 
-
 def warm_up():
     if is_enabled() and _selenium_present():
         threading.Thread(target=is_available, daemon=True).start()
-
 
 def _log(msg):
     try:
@@ -68,7 +60,6 @@ def _log(msg):
         current_app.logger.warning(msg)
     except Exception:
         print(msg)
-
 
 def _print_app_state(printer_name):
     state = {
@@ -81,7 +72,6 @@ def _print_app_state(printer_name):
     if printer_name:
         state["recentDestinations"] = [{"id": printer_name, "origin": "local", "account": ""}]
     return json.dumps(state)
-
 
 def _build_driver():
     from selenium import webdriver
@@ -108,7 +98,6 @@ def _build_driver():
     driver_path = _get("CHROMEDRIVER_PATH", "")
     service = Service(executable_path=driver_path) if driver_path else Service()
     return webdriver.Chrome(service=service, options=opts)
-
 
 def _print_html_sync(html, tag):
     path = None
@@ -138,29 +127,18 @@ def _print_html_sync(html, tag):
             except OSError:
                 pass
 
-
 def print_html_async(html, tag="record"):
     if not is_available():
         return False
     threading.Thread(target=_print_html_sync, args=(html, tag), daemon=True).start()
     return True
 
-
-# --- PDF rendering ----------------------------------------------------------
-# A4 in centimetres (the units Selenium's print command expects) and the full
-# A4 height in CSS pixels at 96 dpi. The CSV backup template lays itself out on a
-# fixed-width "page" with zero page margin, so the whole body must fit inside
-# this height to stay on one sheet. We measure the rendered body and shrink the
-# print scale just enough to guarantee that, with a few pixels of safety.
 A4_CM = (21.0, 29.7)
 A4_HEIGHT_PX = 1122.0
 PDF_SAFETY_PX = 6.0
 
-
 def pdf_capable():
-    """A PDF can be produced when Selenium is importable (Chrome is probed lazily)."""
     return _selenium_present()
-
 
 def _fit_scale(driver):
     try:
@@ -177,13 +155,7 @@ def _fit_scale(driver):
         return 1.0
     return max(0.3, round(usable / height, 3))
 
-
 def html_to_pdf(html, out_path, tag="pdf"):
-    """Render HTML to a single-page A4 PDF at out_path. Returns True on success.
-
-    Best-effort: if Selenium or Chrome is unavailable the function logs and
-    returns False, leaving the caller's other backups (CSV, printer) intact.
-    """
     if not _selenium_present():
         return False
 
@@ -231,9 +203,7 @@ def html_to_pdf(html, out_path, tag="pdf"):
             except OSError:
                 pass
 
-
 def save_pdf_async(html, out_path, tag="pdf"):
-    """Write a one-page PDF on a background thread. Returns True if attempted."""
     if not _selenium_present():
         return False
     threading.Thread(target=html_to_pdf, args=(html, out_path, tag), daemon=True).start()

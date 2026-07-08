@@ -1,7 +1,6 @@
 import base64
 from datetime import datetime, timezone, timedelta
 
-
 def _svg_receipt(label, color):
     svg = (
         '<svg xmlns="http://www.w3.org/2000/svg" width="380" height="500">'
@@ -15,7 +14,6 @@ def _svg_receipt(label, color):
     b64 = base64.b64encode(svg.encode("utf-8")).decode("ascii")
     return "data:image/svg+xml;base64," + b64
 
-
 _DEMO_SIG = {
     "w": 240, "h": 90,
     "s": [[20, 60, 40, 30, 60, 60, 80, 35, 100, 62, 120, 40],
@@ -24,10 +22,7 @@ _DEMO_SIG = {
 
 _NOW = datetime(2026, 1, 19, 14, 30, tzinfo=timezone.utc)
 
-
 def _demo_zone_pdf():
-    """A small synthetic zone sheet (no real data) so the review portal can show
-    and print a zone fund in DEMO mode. Returns PDF bytes, or None without PyMuPDF."""
     try:
         import fitz
         doc = fitz.open()
@@ -96,7 +91,7 @@ SAMPLES = [
         "location": {"lat": 5.3240, "lon": -4.0180, "accuracy": 15, "at": "2026-01-19T14:41:00Z"},
     },
     {
-        "_id": "demo7", "mission": "east", "beneficiary": "Zone — Cocody",
+        "_id": "demo7", "mission": "east", "beneficiary": "Zone - Cocody",
         "accountCode": "00", "accountName": "400-5102 Travel In-field",
         "description": "Zone transport fund (demo)", "amount": 45000,
         "currency": "XOF", "method": "cash", "createdAt": _NOW + timedelta(minutes=20),
@@ -106,12 +101,11 @@ SAMPLES = [
         "location": {"lat": 5.3599, "lon": -3.9880, "accuracy": 20, "at": "2026-01-19T14:50:00Z"},
     },
     {
-        "_id": "demo8", "mission": "east", "beneficiary": "Zone — Dokui",
+        "_id": "demo8", "mission": "east", "beneficiary": "Zone - Dokui",
         "accountCode": "00", "accountName": "400-5102 Travel In-field",
         "description": "Zone transport fund, fetched live (demo)", "amount": 38000,
         "currency": "XOF", "method": "cash", "createdAt": _NOW + timedelta(minutes=25),
         "receiptImage": "", "secondReceiptImage": "",
-        # No stored PDF: the review portal fetches it live from the sheet on demand.
         "zoneFund": {"zone": "Dokui", "sheetId": "1NEtjRwH4CRz1zXC5oVfFhvEvyaUDeJs478SoMz0As_U", "type": "transport"},
     },
 ]

@@ -1,10 +1,3 @@
-"""Local MySQL ledger.
-
-Approved transactions are mirrored into a MySQL table so the office can keep its
-own SQL copy. Connection details and the table name come from settings.py (which
-the review portal's Settings panel can edit at runtime). The table is created
-automatically on first use, so a fresh database needs no manual setup.
-"""
 import settings
 
 try:
@@ -16,36 +9,22 @@ METHOD_TO_CODE = {"cash": "0", "wave": "1", "orange": "2"}
 
 DEFAULT_TABLE = "transactions_2025"
 
-
 def _get(name, default=None):
     return settings.get(name, default)
-
 
 def is_enabled():
     return bool(_get("MYSQL_ENABLED", False)) and pymysql is not None and bool(_get("MYSQL_HOST", ""))
 
-
 def driver_available():
-    """True when pymysql is importable (the connector is installed)."""
     return pymysql is not None
-
 
 def _table_name():
     table = _get("MYSQL_TABLE", DEFAULT_TABLE) or DEFAULT_TABLE
     table = str(table).strip()
-    # Identifiers can't be parameterized, so reject anything but word characters
-    # to keep the f-string interpolation below injection-proof.
     return table if settings.valid_table_name(table) else DEFAULT_TABLE
 
-
 def table_name():
-    """The effective ledger table name (validated, with fallback).
-
-    Exposed for callers like the printed record watermark that want to show
-    which SQL table the transaction is mirrored into.
-    """
     return _table_name()
-
 
 def _mysql_datetime(recorded_at):
     if not recorded_at:
@@ -58,14 +37,7 @@ def _mysql_datetime(recorded_at):
         s = str(recorded_at)
         return s[:10] if len(s) >= 10 else s
 
-
 def _connect(overrides=None):
-    """Open a connection from current settings, optionally overridden in-memory.
-
-    `overrides` lets the Settings panel test unsaved field values without
-    persisting them. A blank password in the overrides falls back to the stored
-    one (the field is write-only in the UI).
-    """
     if pymysql is None:
         raise RuntimeError("pymysql is not installed. Run: pip install -r requirements.txt")
     ov = overrides or {}
@@ -87,12 +59,7 @@ def _connect(overrides=None):
         cursorclass=pymysql.cursors.DictCursor,
     )
 
-
 def _ensure_table(conn, table):
-    """Create the ledger table if it does not already exist.
-
-    An existing table with a different shape is left untouched (IF NOT EXISTS).
-    """
     with conn.cursor() as cur:
         cur.execute(
             f"CREATE TABLE IF NOT EXISTS `{table}` ("
@@ -107,7 +74,6 @@ def _ensure_table(conn, table):
             ") DEFAULT CHARSET=utf8mb4"
         )
     conn.commit()
-
 
 def write(tx, fund_period):
     if not is_enabled():
@@ -153,19 +119,12 @@ def write(tx, fund_period):
             except Exception:
                 pass
 
-
 def _cell(v):
-    """Make a MySQL value JSON-safe (datetimes, Decimals, bytes -> str)."""
     if v is None or isinstance(v, (int, float, str, bool)):
         return v
     return str(v)
 
-
 def run_query(sql):
-    """Run an ad-hoc SQL statement against the MySQL mirror (the dashboard's
-    query console). Returns columns+rows for result sets, or an affected-row
-    message for writes. This targets the append-only mirror, not the canonical
-    SQLite/CSV ledger, so it is safe for the user to query and tinker with."""
     if pymysql is None:
         return {"error": "The pymysql driver isn't installed. Run: pip install -r requirements.txt"}
     if not is_enabled():
@@ -189,7 +148,7 @@ def run_query(sql):
             conn.commit()
             n = cur.rowcount
             return {"columns": [], "rows": [], "rowcount": n, "table": table,
-                    "message": f"OK — {n} row{'s' if n != 1 else ''} affected."}
+                    "message": f"OK - {n} row{'s' if n != 1 else ''} affected."}
     except Exception as e:
         return {"error": str(e)}
     finally:
@@ -199,13 +158,7 @@ def run_query(sql):
             except Exception:
                 pass
 
-
 def test_connection(overrides=None):
-    """Try to connect and ensure the table, returning (ok, message).
-
-    Used by the Settings panel's "Test connection" button. Reports the row count
-    so the user can confirm they reached the table they expect.
-    """
     if pymysql is None:
         return False, "The pymysql driver isn't installed. Run: pip install -r requirements.txt"
 

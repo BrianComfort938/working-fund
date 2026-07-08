@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="utf-8">
-    <title>WF {{ period }} {{ mission }} — Transactions</title>
+    <title>WF {{ period }} {{ mission }} - Transactions</title>
     <style>
         @page { size: A4; margin: 0; }
         * { box-sizing: border-box; }
@@ -43,12 +43,12 @@
         td.neg { color: #b3261e; }
         tbody tr:nth-child(even) td { background: #f6f8f9; }
         tfoot td { font-weight: bold; border-top: 2px solid #2d3c45; background: #eef2f4; }
-    </style>
+</style>
 </head>
 
 <body>
     <div class="hd">
-        <h1>Working Fund &mdash; Closed Period Transactions</h1>
+        <h1>Working Fund - Closed Period Transactions</h1>
         <div class="meta">
             {{ mission_label }}<br>
             WF period {{ period }} &middot; printed {{ printed_at }}
@@ -101,7 +101,7 @@
     {% if auto_print %}<script>
         window.addEventListener('load', function () { setTimeout(function () { window.print(); }, 300); });
         window.addEventListener('afterprint', function () { window.close(); });
-    </script>{% endif %}
+</script>{% endif %}
 </body>
 
 </html>

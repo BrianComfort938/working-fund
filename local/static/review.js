@@ -46,7 +46,7 @@
   const $ = (id) => document.getElementById(id);
   const state = {
     queue: [], idx: 0, period: "000", mission: "east", counts: { east: 0, south: 0 },
-    cloud: false, calRef: null, view: "review",
+    cloud: false, silentPrint: false, calRef: null, view: "review",
   };
 
   async function api(path, opts) {
@@ -68,8 +68,6 @@
     return String(s == null ? "" : s)
       .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
-  // Toggle the "darker, empty" look on a field whose value is blank, so every
-  // field stays present in the form even when there is nothing to show.
   function markEmpty(el, empty) { if (el) el.classList.toggle("is-empty", !!empty); }
 
   async function load() {
@@ -77,11 +75,9 @@
     state.period = s.period;
     state.cloud = s.cloud;
     state.demoReason = s.demoReason || "";
+    state.silentPrint = !!s.silentPrint;
     state.counts = s.counts || { east: 0, south: 0 };
     $("period").value = s.period;
-    // The server keeps the fund period only in memory (it resets to 000 when the
-    // review app restarts), so persist it in this browser and push the saved
-    // value back on load — same approach as the mission below.
     const savedPeriod = localStorage.getItem("workingfund_period");
     if (savedPeriod && savedPeriod !== s.period) {
       try {
@@ -414,10 +410,6 @@
     const hasMedia = !!media;
     if (!media) media = `<div class="receipts-empty">No receipts or signature attached</div>`;
 
-    // Keep the beneficiary and description exactly as submitted from the portal.
-    // (The compact timeline cards still sentence-case for a tidy glance, but the
-    // editable fields and the saved record must preserve the original casing.)
-
     wrap.innerHTML = `
       <div class="rec-field">
         <label>Beneficiary</label>
@@ -449,7 +441,7 @@
       </div>
       <div class="rec-field">
         <label>Attachments</label>
-        <div class="receipts${hasMedia ? "" : " is-empty"}">${media}</div>
+        <div class="receipts${hasMedia ? "" : " is-empty"}${t.hasZoneFund ? " has-zone" : ""}">${media}</div>
       </div>
       <div class="rec-actions">
         <button type="button" class="btn approve" id="actApprove">Approve &amp; print</button>
@@ -504,8 +496,6 @@
 
     if (t.hasSignature && t.signature) drawSignature($("sigCv"), t.signature, 6);
 
-    // Thumbnail failed: if the PDF itself is fetchable (e.g. PyMuPDF missing) embed
-    // it; otherwise the sheet is genuinely unreachable, so say so.
     const zt = wrap.querySelector(".zone-thumb");
     if (zt) zt.addEventListener("error", async () => {
       const fig = zt.closest(".zone-fig");
@@ -576,20 +566,33 @@
     return { beneficiary: t.beneficiary, mission: t.mission, accountCode: t.accountCode, accountName: t.accountName, description: t.description, amount: t.amount, method: t.method };
   }
 
+  function sendToPrintTab(win, url) {
+    if (win && !win.closed) { try { win.location.href = url; return; } catch (_) {} }
+    window.open(url, "_blank");
+  }
+
   async function approve(opts) {
     const noPrint = !!(opts && opts.noPrint);
     const t = cur();
     if (!t) return;
+    const openHere = !noPrint && !state.silentPrint;
+    let recWin = null;
+    if (openHere) recWin = window.open("", "_blank");
     const excludeReceipts = t.excluded ? Object.keys(t.excluded).filter((k) => t.excluded[k]) : [];
     try {
       const res = await api(`/api/approve/${t.id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(Object.assign({}, editPayload(t), { excludeReceipts, noPrint })) });
-      if (!noPrint && !res.printed) window.open(`/print/${t.id}`, "_blank");
-      if (!noPrint && res.hasZone && !res.zonePrinted) window.open(`/print/zone/${t.id}`, "_blank");
-      if (res.rollover) { toast("CSV hit 100 lines, printing backup sheet", "ok"); window.open(`/print/csv-batch/${res.rollover}`, "_blank"); }
+      if (!noPrint) {
+        if (res.printed) { if (recWin && !recWin.closed) recWin.close(); }
+        else sendToPrintTab(recWin, `/print/${t.id}`);
+      }
+      if (res.rollover) { toast("CSV hit 100 lines, printing backup sheet", "ok"); sendToPrintTab(null, `/print/csv-batch/${res.rollover}`); }
       else toast(noPrint ? "Approved, not printed" : (res.printed ? "Approved & printed" : "Approved & printing"), "ok");
       pushHist(HKEY_COMMITTED, snapshot(t));
       removeCurrent(true);
-    } catch (e) { toast("Approve failed", "err"); }
+    } catch (e) {
+      if (recWin && !recWin.closed) recWin.close();
+      toast("Approve failed", "err");
+    }
   }
 
   function skip() {
@@ -777,7 +780,7 @@
       MYSQL_DB: $("myDb").value.trim(),
       MYSQL_USER: $("myUser").value.trim(),
       MYSQL_TABLE: $("myTable").value.trim(),
-      MYSQL_PASSWORD: $("myPassword").value, // blank means "leave unchanged"
+      MYSQL_PASSWORD: $("myPassword").value,
     };
   }
   function applyMysql(m) {
@@ -841,9 +844,6 @@
     } catch (e) { setMyStatus("Test failed (server error).", "err"); }
   }
 
-  // Excel-style key tips. Press Alt to paint a key hint over every control in the
-  // review view; press the shown key to use that control. Each entry resolves its
-  // element live, because the form is re-rendered for every transaction.
   const KEYTIPS = [
     { code: "b", label: "B", el: () => $("f_ben") },
     { code: "m", label: "M", el: () => $("f_mission") },
@@ -978,7 +978,6 @@
     $("confirmCancel").addEventListener("click", () => { $("confirmModal").classList.add("hidden"); pendingDelete = null; });
     $("confirmOk").addEventListener("click", doDelete);
     document.addEventListener("keydown", onKey);
-    // Swallow the lone-Alt keyup so the browser does not pull focus to its menu bar.
     document.addEventListener("keyup", (e) => { if (e.key === "Alt" && state.view === "review") e.preventDefault(); });
     load().catch(() => toast("Could not load transactions", "err"));
   });
