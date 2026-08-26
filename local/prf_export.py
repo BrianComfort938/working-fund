@@ -61,7 +61,7 @@ def _label(account_name):
     return (parts[1] if len(parts) > 1 else account_name or "").upper()
 
 def fill_close(mission, mission_label, period, account_totals, account_codes,
-               cash_counts, wave, orange, date_range=None):
+               cash_counts, wave, orange, gl_prefix="1385", date_range=None):
     if not available():
         raise RuntimeError("PRF template or openpyxl unavailable")
 
@@ -106,10 +106,18 @@ def fill_close(mission, mission_label, period, account_totals, account_codes,
             last_line += 1
             pr.cell(row=row, column=COL_B).value = last_line
             pr.cell(row=row, column=COL_C).value = "IVC01"
-            pr.cell(row=row, column=COL_D).value = "1385" + (series or "")
+            pr.cell(row=row, column=COL_D).value = str(gl_prefix) + (series or "")
             pr.cell(row=row, column=COL_E).value = acct
             pr.cell(row=row, column=COL_L).value = _label(name)
             row_by_key[(series, acct)] = row
+        else:
+            # Rows are matched on the series alone, so a template belonging to
+            # another mission matches but carries that mission's GL prefix and
+            # its wording. Correct both, or South's form goes out reading 1385.
+            want = str(gl_prefix) + (series or "")
+            if str(pr.cell(row=row, column=COL_D).value or "") != want:
+                pr.cell(row=row, column=COL_D).value = want
+                pr.cell(row=row, column=COL_L).value = _label(name)
         pr.cell(row=row, column=COL_S).value = int(round(total))
         written.append({"code": code, "name": name, "row": row, "total": int(round(total))})
 

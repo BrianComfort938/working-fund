@@ -1,48 +1,46 @@
 (function () {
   "use strict";
 
-  const ACCOUNT_CODES = {
-    "00": "400-5102 Travel In-field",
-    "01": "400-5700 Furnishings YM",
-    "02": "400-5930 Food and Personal Items",
-    "03": "400-5868 Utilities YM",
-    "04": "400-5862 Rent YM",
-    "05": "400-5920 Charitable Assistance",
-    "06": "400-5221 Book of Mormon",
-    "10": "000-5102 Travel Admin",
-    "11": "000-5496 Luncheons, Socials & Hosting",
-    "12": "000-5860 Small Purchases/Services for Mission Home & Office",
-    "13": "000-5500 Miscellaneous",
-    "14": "000-5370 Telephone and Internet",
-    "15": "000-5221 Teaching Literature and Supplies",
-    "16": "000-5200 Operating materials and supplies",
-    "17": "000-5170 Vehicle Gasoline",
-    "18": "000-5379 Postage and Mailing",
-    "19": "000-5700 Small Office Equipment",
-    "20": "000-5461 Bank Fees",
-    "21": "000-5776 Small Office Equipment and Maintenance",
-    "22": "000-5862 Rent Admin",
-    "23": "000-5868 Utilities Admin",
-    "30": "480-5862 Rent SM",
-    "31": "480-5700 Furnishings SM",
-    "32": "480-5868 Utilities SM",
-    "40": "600-5480 Vehicle Taxes and Fees",
-    "41": "600-5700 Vehicle Equipment",
-    "42": "600-5772 Vehicle Maintenance and repairs",
-    "50": "900-5102 Travel, Baggage, Visa and Other",
-    "51": "900-5949 Missionary Medical"
-  };
-  const ACCOUNT_ORDER = Object.keys(ACCOUNT_CODES).sort();
+  // Every mission has its own chart of accounts (docs/accounts.js). These read
+  // through the `mission` variable, so switching mission switches the list.
+  const ACCOUNTS = window.WORKINGFUND_ACCOUNTS || {};
+  const chart = (m) => ACCOUNTS[m || mission] || ACCOUNTS.east || { codes: {}, series: {} };
+  const acctCodes = (m) => chart(m).codes || {};
+  const acctOrder = (m) => Object.keys(acctCodes(m)).sort();
+  const acctSeries = (m) => chart(m).series || {};
+  // A name always starts with its "SERIES-ACCOUNT" number; the code column
+  // already shows that number for missions whose code is the number, so don't
+  // print it twice.
+  const acctLabel = (code, name) =>
+    (name && code && name.indexOf(code + " ") === 0) ? name.slice(code.length + 1) : (name || "");
+  // A code from another mission's chart still needs a readable name.
+  function acctName(code, m) {
+    if (!code) return "";
+    const own = acctCodes(m)[code];
+    if (own !== undefined) return own;
+    for (const k in ACCOUNTS) {
+      const hit = (ACCOUNTS[k].codes || {})[code];
+      if (hit !== undefined) return hit;
+    }
+    return "";
+  }
+  // Presets and history are shared across missions but codes are not, so match
+  // on the GL number in the name: East "02" and South "400-5930" are the same
+  // account. Returns "" when this mission has no equivalent.
+  function translateCode(code, m) {
+    if (!code) return "";
+    if (acctCodes(m)[code] !== undefined) return code;
+    const gl = (acctName(code, m) || "").split(" ")[0];
+    if (!gl || gl.indexOf("-") === -1) return "";
+    const codes = acctCodes(m);
+    for (const c in codes) {
+      if (codes[c].indexOf(gl + " ") === 0) return c;
+    }
+    return "";
+  }
 
-  const SERIES_META = {
-    "400": { label: "Field", color: "#2e7d32" },
-    "000": { label: "Admin", color: "#00618a" },
-    "480": { label: "Senior", color: "#6a3d9a" },
-    "600": { label: "Vehicle", color: "#e3811d" },
-    "900": { label: "Travel / Medical", color: "#b3261e" }
-  };
   const seriesKey = (name) => (name || "").slice(0, 3);
-  const seriesColor = (name) => (SERIES_META[seriesKey(name)] || {}).color || "#69757f";
+  const seriesColor = (name, m) => (acctSeries(m)[seriesKey(name)] || {}).color || "#69757f";
 
   const cfg = window.WORKINGFUND_CONFIG || {};
   const CURRENCY = cfg.CURRENCY || "XOF";
@@ -60,7 +58,6 @@
   const RETIRED_PRESET_IDS = ["p_zhealth", "p_ztravel"];
 
   const ZONES = window.WORKINGFUND_ZONES || [];
-  const ZONE_TYPE_ACCOUNT = { transport: "00", sante: "51" };
   const ZONE_TYPE_LABEL = { transport: "Transport", sante: "Health (Santé)" };
 
   const $ = (id) => document.getElementById(id);
@@ -110,19 +107,25 @@
     $("recentMissionTag").textContent = "(" + titleCase(m) + ")";
     const cur = $("missionCurrent");
     if (cur) cur.textContent = titleCase(m);
+    // Each mission has its own chart of accounts, so the picker and whatever is
+    // already selected both have to follow the switch.
+    buildAccountCombo();
+    setAccount(translateCode(selectedAccount));
+    buildPresetAccountSelect();
+    renderPresets();
     loadWaveBalance();
     renderOutbox();
     renderRecent();
   }
 
   function accountRowHtml(code) {
-    const name = ACCOUNT_CODES[code];
+    const name = acctCodes()[code];
     const color = seriesColor(name);
-    return `<div class="combo-opt" role="option" data-code="${code}" style="border-left-color:${color}">` +
-      `<span class="c-code">${code}</span><span class="c-name">${name}</span></div>`;
+    return `<div class="combo-opt" role="option" data-code="${escapeHtml(code)}" style="border-left-color:${color}">` +
+      `<span class="c-code">${escapeHtml(code)}</span><span class="c-name">${escapeHtml(acctLabel(code, name))}</span></div>`;
   }
   function buildAccountCombo() {
-    $("accountList").innerHTML = ACCOUNT_ORDER.map(accountRowHtml).join("");
+    $("accountList").innerHTML = acctOrder().map(accountRowHtml).join("");
     bindAccountOptions();
   }
   function bindAccountOptions() {
@@ -131,8 +134,8 @@
   }
   function filterAccounts(q) {
     q = (q || "").trim().toLowerCase();
-    const codes = !q ? ACCOUNT_ORDER : ACCOUNT_ORDER.filter((code) => {
-      const name = ACCOUNT_CODES[code].toLowerCase();
+    const codes = !q ? acctOrder() : acctOrder().filter((code) => {
+      const name = acctCodes()[code].toLowerCase();
       return code.indexOf(q) !== -1 || name.indexOf(q) !== -1;
     });
     $("accountList").innerHTML = codes.map(accountRowHtml).join("");
@@ -148,13 +151,13 @@
       chip.classList.add("hidden");
       return;
     }
-    const name = ACCOUNT_CODES[code];
+    const name = acctName(code);
     label.classList.remove("placeholder");
-    label.innerHTML = `<span class="tl-code">${code}</span><span class="tl-name">${name}</span>`;
+    label.innerHTML = `<span class="tl-code">${escapeHtml(code)}</span><span class="tl-name">${escapeHtml(acctLabel(code, name))}</span>`;
     const color = seriesColor(name);
     chip.style.borderLeftColor = color;
     chip.innerHTML = `<span class="swatch" style="background:${color}"></span>` +
-      `<span class="code">${code}</span><span>${name}</span>`;
+      `<span class="code">${escapeHtml(code)}</span><span>${escapeHtml(acctLabel(code, name))}</span>`;
     chip.classList.remove("hidden");
   }
   function openCombo() {
@@ -260,23 +263,31 @@
   }
   function presetSummary(p) {
     const parts = [];
-    if (p.accountCode) parts.push(p.accountCode + " " + (ACCOUNT_CODES[p.accountCode] || ""));
+    if (p.accountCode) parts.push(p.accountCode + " " + acctLabel(p.accountCode, acctName(p.accountCode)));
     if (p.amount) parts.push(groupDigits(p.amount) + " " + CURRENCY);
     if (p.method) parts.push(METHOD_LABELS[p.method] || p.method);
     return parts.join(" · ");
   }
   function applyPreset(p) {
-    if (p.accountCode && ACCOUNT_CODES[p.accountCode]) setAccount(p.accountCode);
+    // Presets are shared across missions, so the code may need translating and
+    // may not exist here at all.
+    let missingAccount = false;
+    if (p.accountCode) {
+      const pCode = translateCode(p.accountCode);
+      if (pCode) setAccount(pCode);
+      else { setAccount(""); missingAccount = true; }
+    }
     $("description").value = p.description || "";
     if (p.amount) setAmount(p.amount); else setAmount(0);
     if (p.method) selectMethod(p.method);
-    toast("Applied: " + p.label, "ok");
+    if (missingAccount) toast(`Applied: ${p.label}. ${titleCase(mission)} has no matching account, pick one.`, "err");
+    else toast("Applied: " + p.label, "ok");
   }
 
   function buildPresetAccountSelect() {
     const sel = $("pAccount");
     sel.innerHTML = '<option value="">None</option>' +
-      ACCOUNT_ORDER.map((c) => `<option value="${c}">${c}  ${ACCOUNT_CODES[c]}</option>`).join("");
+      acctOrder().map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c + "  " + acctLabel(c, acctCodes()[c]))}</option>`).join("");
   }
   function renderPresetManageList() {
     const wrap = $("presetManageList");
@@ -567,8 +578,8 @@
       if (!ztype) { toast("Pick Transport or Health", "err"); return; }
       zoneFund = { zone: z.name, sheetId: z.id, type: ztype };
       zoneFundPdf = ""; zoneAttachState = "";
-      const acct = ZONE_TYPE_ACCOUNT[ztype];
-      if (acct && ACCOUNT_CODES[acct]) setAccount(acct);
+      const acct = (chart().zoneAccounts || {})[ztype];
+      if (acct && acctCodes()[acct]) setAccount(acct);
       $("zoneModal").classList.add("hidden");
       renderZoneFundPreview();
       startZoneAttach();
@@ -729,7 +740,7 @@
     list.innerHTML = items.map((r) => {
       const neg = r.amount < 0;
       const amt = (neg ? "-" : "") + groupDigits(Math.abs(r.amount));
-      const color = seriesColor(ACCOUNT_CODES[r.accountCode]);
+      const color = seriesColor(acctName(r.accountCode));
       return `<div class="recent-row">` +
         `<span class="r-code" style="color:${color}">${r.accountCode || "--"}</span>` +
         `<span class="r-main"><span class="r-who">${escapeHtml(r.beneficiary || "")}</span>` +
@@ -765,7 +776,7 @@
     if (!q) return [];
     const seen = new Set();
     return loadHistory().filter((e) => {
-      const hay = (e.beneficiary + " " + e.description + " " + (ACCOUNT_CODES[e.accountCode] || "")).toLowerCase();
+      const hay = (e.beneficiary + " " + e.description + " " + acctName(e.accountCode)).toLowerCase();
       if (hay.indexOf(q) === -1) return false;
       const k = [e.beneficiary, e.accountCode, e.description, e.amount, e.sign, e.method].join("|").toLowerCase();
       if (seen.has(k)) return false;
@@ -773,7 +784,7 @@
     }).slice(0, 6);
   }
   function suggestionRowHtml(e) {
-    const acct = e.accountCode ? `${e.accountCode} ${ACCOUNT_CODES[e.accountCode] || ""}` : "";
+    const acct = e.accountCode ? `${e.accountCode} ${acctLabel(e.accountCode, acctName(e.accountCode))}` : "";
     const amt = e.amount ? (e.sign < 0 ? "-" : "") + groupDigits(e.amount) + " " + CURRENCY : "";
     const meta = [acct, amt, METHOD_LABELS[e.method] || ""].filter(Boolean).join(" · ");
     return `<div class="ac-opt" role="option">` +
@@ -782,7 +793,8 @@
   }
   function applyHistoryEntry(e) {
     if (e.beneficiary) $("beneficiary").value = e.beneficiary;
-    if (e.accountCode && ACCOUNT_CODES[e.accountCode]) setAccount(e.accountCode);
+    const eCode = translateCode(e.accountCode);
+    if (eCode) setAccount(eCode);
     $("description").value = e.description || "";
     if (e.amount) { setAmount(e.amount); if (e.sign < 0) { amountSign = -1; renderAmount(); } }
     if (e.method) selectMethod(e.method);
@@ -920,7 +932,7 @@
       }
       const tx = {
         mission, beneficiary: $("beneficiary").value.trim(),
-        accountCode: selectedAccount, accountName: ACCOUNT_CODES[selectedAccount],
+        accountCode: selectedAccount, accountName: acctName(selectedAccount),
         description: $("description").value.trim(), amount: amountValue(),
         currency: CURRENCY, method, receiptImage,
         secondReceiptImage: SECOND_RECEIPT[method] ? secondImage : "",

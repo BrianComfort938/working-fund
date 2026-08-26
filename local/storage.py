@@ -295,6 +295,21 @@ def list_transactions(mission=None, period=None):
 _EDITABLE_TEXT = ("beneficiary", "account_code", "account_name", "description",
                   "method", "mission", "recorded_at", "fund_period")
 
+def get_transaction(tx_id):
+    if not tx_id:
+        return None
+    try:
+        con = sqlite3.connect(DB_PATH)
+        con.row_factory = sqlite3.Row
+        row = con.execute(
+            "SELECT mission, fund_period, account_code, account_name, recorded_at "
+            "FROM transactions WHERE transaction_id=? ORDER BY id DESC LIMIT 1",
+            (tx_id,)).fetchone()
+        con.close()
+        return dict(row) if row else None
+    except Exception:
+        return None
+
 def update_transaction(tx_id, fields):
     if not tx_id or not isinstance(fields, dict):
         return False

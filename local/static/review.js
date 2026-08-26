@@ -1,34 +1,32 @@
 (function () {
   "use strict";
 
-  const ACCOUNT_CODES = {
-    "00": "400-5102 Travel In-field", "01": "400-5700 Furnishings YM",
-    "02": "400-5930 Food and Personal Items", "03": "400-5868 Utilities YM",
-    "04": "400-5862 Rent YM", "05": "400-5920 Charitable Assistance",
-    "06": "400-5221 Book of Mormon", "10": "000-5102 Travel Admin",
-    "11": "000-5496 Luncheons, Socials & Hosting",
-    "12": "000-5860 Small Purchases/Services for Mission Home & Office",
-    "13": "000-5500 Miscellaneous", "14": "000-5370 Telephone and Internet",
-    "15": "000-5221 Teaching Literature and Supplies",
-    "16": "000-5200 Operating materials and supplies",
-    "17": "000-5170 Vehicle Gasoline", "18": "000-5379 Postage and Mailing",
-    "19": "000-5700 Small Office Equipment", "20": "000-5461 Bank Fees",
-    "21": "000-5776 Small Office Equipment and Maintenance",
-    "22": "000-5862 Rent Admin", "23": "000-5868 Utilities Admin",
-    "30": "480-5862 Rent SM", "31": "480-5700 Furnishings SM",
-    "32": "480-5868 Utilities SM", "40": "600-5480 Vehicle Taxes and Fees",
-    "41": "600-5700 Vehicle Equipment", "42": "600-5772 Vehicle Maintenance and repairs",
-    "50": "900-5102 Travel, Baggage, Visa and Other", "51": "900-5949 Missionary Medical",
-  };
-  const ACCOUNT_ORDER = Object.keys(ACCOUNT_CODES).sort();
-  const SERIES_META = {
-    "400": { label: "Field", color: "#2e7d32" },
-    "000": { label: "Admin", color: "#00618a" },
-    "480": { label: "Senior", color: "#6a3d9a" },
-    "600": { label: "Vehicle", color: "#e3811d" },
-    "900": { label: "Travel / Medical", color: "#b3261e" },
-  };
-  const seriesColor = (name) => (SERIES_META[(name || "").slice(0, 3)] || {}).color || "#69757f";
+  // Every mission has its own chart of accounts. The map is injected by
+  // review.html straight from local/accounts.py.
+  const ACCOUNTS = window.WORKINGFUND_ACCOUNTS || {};
+  const DEFAULT_MISSION = "east";
+  const chart = (m) => ACCOUNTS[m] || ACCOUNTS[DEFAULT_MISSION] || { codes: {}, series: {} };
+  const accountCodes = (m) => chart(m).codes || {};
+  const accountOrder = (m) => Object.keys(accountCodes(m)).sort();
+  const seriesMeta = (m) => chart(m).series || {};
+  // A name always starts with its "SERIES-ACCOUNT" number; the code column
+  // already shows the number for missions whose code is that number, so drop
+  // the repeat from the label.
+  const accountLabel = (code, name) =>
+    (name && code && name.indexOf(code + " ") === 0) ? name.slice(code.length + 1) : (name || "");
+  // Codes recorded before a mission got its own chart still need a name.
+  function accountName(mission, code) {
+    if (!code) return "";
+    const own = accountCodes(mission)[code];
+    if (own !== undefined) return own;
+    for (const m in ACCOUNTS) {
+      const hit = (ACCOUNTS[m].codes || {})[code];
+      if (hit !== undefined) return hit;
+    }
+    return "";
+  }
+  const seriesColor = (name, mission) =>
+    (seriesMeta(mission)[(name || "").slice(0, 3)] || {}).color || "#69757f";
   const groupDigits = (s) => String(s).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   const fmtAmount = (amt, cur) => {
     const n = Math.abs(parseInt(amt, 10) || 0);
@@ -46,13 +44,22 @@
   const $ = (id) => document.getElementById(id);
   const state = {
     queue: [], idx: 0, period: "000", mission: "east", counts: { east: 0, south: 0 },
-    cloud: false, silentPrint: false, calRef: null, view: "review",
+    cloud: false, silentPrint: false, zonePrint: true, calRef: null, view: "review",
   };
 
   async function api(path, opts) {
     const r = await fetch(path, opts);
-    if (!r.ok) throw new Error("HTTP " + r.status);
+    if (!r.ok) throw new Error(await apiError(r));
     return r.json();
+  }
+  // The server explains its own failures in {"error": "..."}; show that
+  // instead of a bare status code the user can do nothing with.
+  async function apiError(r) {
+    try {
+      const body = await r.json();
+      if (body && body.error) return String(body.error);
+    } catch (e) { /* not JSON */ }
+    return "HTTP " + r.status;
   }
   const cur = () => state.queue[state.idx] || null;
 
@@ -76,6 +83,7 @@
     state.cloud = s.cloud;
     state.demoReason = s.demoReason || "";
     state.silentPrint = !!s.silentPrint;
+    state.zonePrint = s.zonePrint !== false;
     state.counts = s.counts || { east: 0, south: 0 };
     $("period").value = s.period;
     const savedPeriod = localStorage.getItem("workingfund_period");
@@ -339,19 +347,52 @@
     metaEl.innerHTML = `<a href="https://www.google.com/maps?q=${loc.lat},${loc.lon}" target="_blank" rel="noopener">${esc(ll)}</a>${acc}`;
   }
 
-  function buildAccountOptions(selected) {
+  function buildAccountOptions(mission, selected) {
+    const codes = accountCodes(mission);
     const order = [], groups = {};
-    ACCOUNT_ORDER.forEach((code) => {
-      const k = ACCOUNT_CODES[code].slice(0, 3);
+    accountOrder(mission).forEach((code) => {
+      const k = codes[code].slice(0, 3);
       if (!groups[k]) { groups[k] = []; order.push(k); }
       groups[k].push(code);
     });
-    return order.map((k) => {
-      const meta = SERIES_META[k] || { label: k };
-      const opts = groups[k].map((code) =>
-        `<option value="${code}" ${code === selected ? "selected" : ""}>${code}  ${esc(ACCOUNT_CODES[code])}</option>`).join("");
-      return `<optgroup label="${k}: ${meta.label}">${opts}</optgroup>`;
+    const opt = (code, name) =>
+      `<option value="${esc(code)}" ${code === selected ? "selected" : ""}>${esc(code)}  ${esc(accountLabel(code, name))}</option>`;
+    let html = order.map((k) => {
+      const meta = seriesMeta(mission)[k] || { label: k };
+      return `<optgroup label="${k}: ${meta.label}">${groups[k].map((c) => opt(c, codes[c])).join("")}</optgroup>`;
     }).join("");
+    // A transaction recorded under another mission's chart keeps its own code,
+    // so it stays selectable instead of silently switching account on save.
+    if (selected && codes[selected] === undefined) {
+      html = `<optgroup label="Recorded under another chart of accounts">` +
+        opt(selected, accountName(mission, selected) || "(unknown account)") + `</optgroup>` + html;
+    }
+    // Without this the select would show the first account while the
+    // transaction still carries none, and switching mission would commit it.
+    if (!selected) html = `<option value="" selected>(none)</option>` + html;
+    return html;
+  }
+
+  // The date input works in local time and writes back a local, naive ISO
+  // stamp, so what the reviewer picks is exactly what gets printed and filed.
+  function toDateInput(iso) {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (isNaN(d)) return "";
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
+      `T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+  function fromDateInput(v) {
+    return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(v || "") ? v + ":00" : "";
+  }
+
+  function setAccountFromSelect(t) {
+    t.accountCode = $("f_acc").value;
+    t.accountName = accountName(t.mission, t.accountCode);
+    $("f_acctName").textContent = t.accountName;
+    document.querySelector(".acct-hint .swatch").style.background =
+      seriesColor(t.accountName, t.mission);
   }
 
   function fmtWhen(iso) {
@@ -391,7 +432,7 @@
         <p class="muted">Nothing left in this mission. Switch mission above, open History, or close this tab.</p></div>`;
       return;
     }
-    const color = seriesColor(t.accountName);
+    const color = seriesColor(t.accountName, t.mission);
     const neg = t.amount < 0;
     let media = "";
     if (t.hasReceipt) media += receiptFigure(t, "main", "Receipt");
@@ -402,7 +443,10 @@
     if (t.hasZoneFund) {
       const zf = t.zoneFund || {};
       const lbl = (zf.zone ? zf.zone + " · " : "") + (zf.type === "sante" ? "Health (Santé)" : "Transport") + " sheet";
-      media += `<figure class="receipt-fig zone-fig"><figcaption>${esc(lbl)}</figcaption>` +
+      const zoneWarn = state.zonePrint ? "" :
+        `<div class="zone-error">This sheet will not print: PyMuPDF is not installed. ` +
+        `Run <code>pip install -r local/requirements.txt</code>.</div>`;
+      media += `<figure class="receipt-fig zone-fig"><figcaption>${esc(lbl)}</figcaption>${zoneWarn}` +
         `<a class="zone-thumb-link" href="/api/zonefund/${t.id}.pdf" target="_blank" rel="noopener" title="Open the full sheet">` +
         `<img class="zone-thumb" src="/api/zonefund/${t.id}.png" alt="${esc(lbl)}"></a>` +
         `<a class="zone-open" href="/api/zonefund/${t.id}.pdf" target="_blank" rel="noopener">Open sheet in a new tab</a></figure>`;
@@ -415,7 +459,10 @@
         <label>Beneficiary</label>
         <input id="f_ben" value="${esc(t.beneficiary)}" placeholder="Full name">
       </div>
-      <div class="rec-grid">
+      <div class="rec-grid three">
+        <div class="rec-field"><label>Date</label>
+          <input type="datetime-local" id="f_date" value="${esc(toDateInput(t.recordedAt))}">
+        </div>
         <div class="rec-field"><label>Mission</label>
           <select id="f_mission">${MISSIONS.map((m) => `<option value="${m}" ${m === t.mission ? "selected" : ""}>${titleCase(m)}</option>`).join("")}</select>
         </div>
@@ -425,7 +472,7 @@
       </div>
       <div class="rec-field">
         <label>Account</label>
-        <select id="f_acc">${buildAccountOptions(t.accountCode)}</select>
+        <select id="f_acc">${buildAccountOptions(t.mission, t.accountCode)}</select>
         <span class="acct-hint"><span class="swatch" style="background:${color}"></span><span id="f_acctName">${esc(t.accountName)}</span></span>
       </div>
       <div class="rec-field">
@@ -451,14 +498,20 @@
       </div>`;
 
     $("f_ben").addEventListener("input", (e) => { t.beneficiary = e.target.value; markEmpty(e.target, !e.target.value.trim()); });
-    $("f_mission").addEventListener("change", (e) => { t.mission = e.target.value; });
+    $("f_date").addEventListener("change", (e) => {
+      const iso = fromDateInput(e.target.value);
+      if (iso) { t.recordedAt = iso; markEmpty(e.target, false); }
+      else { markEmpty(e.target, true); }
+    });
+    $("f_mission").addEventListener("change", (e) => {
+      t.mission = e.target.value;
+      // Each mission has its own accounts, so the list has to follow.
+      $("f_acc").innerHTML = buildAccountOptions(t.mission, t.accountCode);
+      setAccountFromSelect(t);
+    });
     $("f_method").addEventListener("change", (e) => { t.method = e.target.value; });
     $("f_desc").addEventListener("input", (e) => { t.description = e.target.value; markEmpty(e.target, !e.target.value.trim()); });
-    $("f_acc").addEventListener("change", (e) => {
-      t.accountCode = e.target.value; t.accountName = ACCOUNT_CODES[t.accountCode] || "";
-      $("f_acctName").textContent = t.accountName;
-      document.querySelector(".acct-hint .swatch").style.background = seriesColor(t.accountName);
-    });
+    $("f_acc").addEventListener("change", () => setAccountFromSelect(t));
     const amt = $("f_amt");
     amt.addEventListener("input", () => {
       const digits = amt.value.replace(/\D/g, "");
@@ -563,7 +616,7 @@
     const a = loadHist(key); a.unshift(snap); localStorage.setItem(key, JSON.stringify(a.slice(0, HIST_CAP)));
   }
   function editPayload(t) {
-    return { beneficiary: t.beneficiary, mission: t.mission, accountCode: t.accountCode, accountName: t.accountName, description: t.description, amount: t.amount, method: t.method };
+    return { beneficiary: t.beneficiary, mission: t.mission, accountCode: t.accountCode, accountName: t.accountName, description: t.description, amount: t.amount, method: t.method, recordedAt: t.recordedAt };
   }
 
   function sendToPrintTab(win, url) {
@@ -585,7 +638,11 @@
         if (res.printed) { if (recWin && !recWin.closed) recWin.close(); }
         else sendToPrintTab(recWin, `/print/${t.id}`);
       }
-      if (res.rollover) { toast("CSV hit 100 lines, printing backup sheet", "ok"); sendToPrintTab(null, `/print/csv-batch/${res.rollover}`); }
+      if (res.rollover) sendToPrintTab(null, `/print/csv-batch/${res.rollover}`);
+      // A zone sheet that silently fell off the printout is the one thing worth
+      // saying over the usual confirmation.
+      if (res.zoneDropped) toast(res.zoneReason || "The zone fund sheet could not be fetched, so it did not print.", "err");
+      else if (res.rollover) toast("CSV hit 100 lines, printing backup sheet", "ok");
       else toast(noPrint ? "Approved, not printed" : (res.printed ? "Approved & printed" : "Approved & printing"), "ok");
       pushHist(HKEY_COMMITTED, snapshot(t));
       removeCurrent(true);
@@ -647,7 +704,7 @@
     el.innerHTML = items.map((r, i) => {
       const neg = r.amount < 0;
       const amt = (neg ? "-" : "") + groupDigits(Math.abs(r.amount));
-      const color = seriesColor(r.accountName || ACCOUNT_CODES[r.accountCode]);
+      const color = seriesColor(r.accountName || accountName(r.mission, r.accountCode), r.mission);
       return `<div class="hist-row">` +
         `<span class="h-code" style="color:${color}">${esc(r.accountCode || "--")}</span>` +
         `<span class="h-main"><span class="h-who">${esc(r.beneficiary || "")}</span>` +

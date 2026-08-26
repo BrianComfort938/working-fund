@@ -1,4 +1,5 @@
 import re
+import time
 import base64
 import urllib.request
 
@@ -18,9 +19,15 @@ KNOWN_SANTE_GID = {
 }
 
 _SHEET_ID_RE = re.compile(r"^[A-Za-z0-9_-]{20,}$")
-_TIMEOUT = 8
+_TIMEOUT = 6
 _UA = "Mozilla/5.0 (WorkingFund review portal)"
 _gid_cache = {}
+
+# Google throttles bursts and occasionally just times out. A single hiccup used
+# to drop the sheet off the printed record with nothing to show for it, so give
+# a failed export a couple of quick second chances. Worst case is ~20s, and only
+# when the sheet is genuinely unreachable.
+_RETRY_DELAYS = (0.5, 1.5)
 
 def _export_url(sheet_id, gid):
     return (f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=pdf&gid={gid}"
@@ -53,19 +60,44 @@ def _resolve_gid(sheet_id, ztype):
         return KNOWN_SANTE_GID[sheet_id]
     return _resolve_tab_gid(sheet_id, "SANTE")
 
+def _export_once(url):
+    with _open(url) as r:
+        if "pdf" not in (r.headers.get("Content-Type", "") or ""):
+            return b""
+        return r.read() or b""
+
 def fetch_pdf(sheet_id, ztype):
+    """The sheet as PDF bytes, or b"" if it could not be fetched."""
     if not sheet_id or not _SHEET_ID_RE.match(str(sheet_id)):
         return b""
     try:
         gid = _resolve_gid(sheet_id, ztype)
-        if gid is None:
-            return b""
-        with _open(_export_url(sheet_id, gid)) as r:
-            if "pdf" not in (r.headers.get("Content-Type", "") or ""):
-                return b""
-            return r.read() or b""
     except Exception:
+        gid = None
+    if gid is None:
         return b""
+
+    url = _export_url(sheet_id, gid)
+    for attempt, delay in enumerate((0,) + _RETRY_DELAYS):
+        if delay:
+            time.sleep(delay)
+        try:
+            pdf = _export_once(url)
+            if pdf:
+                return pdf
+        except Exception as e:
+            last = e
+        else:
+            last = "the export returned no PDF"
+        _log(f"zone sheet export attempt {attempt + 1} failed ({last}): {url}")
+    return b""
+
+def _log(msg):
+    try:
+        from flask import current_app
+        current_app.logger.warning(msg)
+    except Exception:
+        pass
 
 def fetch_pdf_data_url(sheet_id, ztype):
     pdf = fetch_pdf(sheet_id, ztype)

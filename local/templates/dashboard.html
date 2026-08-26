@@ -308,9 +308,32 @@
       }
       async function api(path, opts) {
         const r = await fetch(path, opts);
-        if (!r.ok) throw new Error("HTTP " + r.status);
+        if (!r.ok) throw new Error(await apiError(r));
         return r.json();
       }
+      // The server explains its own failures in {"error": "..."}; show that
+      // instead of a bare status code the user can do nothing with.
+      async function apiError(r) {
+        try {
+          const body = await r.json();
+          if (body && body.error) return String(body.error);
+        } catch (e) { /* not JSON */ }
+        return "HTTP " + r.status;
+      }
+      // The picker works in local time and writes back a local, naive ISO
+      // stamp, so what is picked is what gets stored and printed.
+      function toDateInput(iso) {
+        if (!iso) return "";
+        const d = new Date(iso);
+        if (isNaN(d)) return String(iso).slice(0, 16);
+        const pad = (n) => String(n).padStart(2, "0");
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
+          `T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      }
+      function fromDateInput(v) {
+        return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(v || "") ? v + ":00" : "";
+      }
+
       function fmtDate(iso) {
         if (!iso) return "-";
         const d = new Date(iso);
@@ -663,7 +686,12 @@
             `<p class="wiz-status err">Cash Count denominations aren't available. Put PRF_Template.xlsx in the local/ folder.</p>`);
           return;
         }
-        wizBodyHtml(`<h3>Cash count</h3>` +
+        // Step 2 writes the Excel and is the first step that needs the template,
+        // so say now that it will fail rather than after the count is typed in.
+        const notReady = (DATA && DATA.templateReady === false)
+          ? `<p class="wiz-status err">${esc((DATA.templateReason || "The Excel template isn't ready.") + " Until then, step 2 (Update Excel) cannot run.")}</p>`
+          : "";
+        wizBodyHtml(`<h3>Cash count</h3>` + notReady +
           `<div id="wizCashMount"></div>` +
           `<div class="cash-saved" id="wzCashSaved">${esc(fmtSaved(cash.updatedAt))}</div>`);
         const mount = $("wizCashMount");
@@ -726,9 +754,23 @@
         } else { load(); }
       }
 
-      function accountOptions(sel) {
-        return `<option value="">(none)</option>` + Object.keys(DATA.accountCodes).sort().map((c) =>
-          `<option value="${c}" ${c === sel ? "selected" : ""}>${esc(c + "  " + DATA.accountCodes[c])}</option>`).join("");
+      // A name always starts with its "SERIES-ACCOUNT" number, so for missions
+      // whose code is that number, don't print it twice.
+      function accountOptionText(code, name) {
+        const label = (name && name.indexOf(code + " ") === 0) ? name.slice(code.length + 1) : name;
+        return code + "  " + (label || "");
+      }
+      function accountOptions(sel, selName) {
+        const codes = DATA.accountCodes || {};
+        let html = `<option value="">(none)</option>` + Object.keys(codes).sort().map((c) =>
+          `<option value="${esc(c)}" ${c === sel ? "selected" : ""}>${esc(accountOptionText(c, codes[c]))}</option>`).join("");
+        // Keep a code from another mission's chart of accounts selectable, so
+        // saving an unrelated edit can't silently move the row to (none).
+        if (sel && codes[sel] === undefined) {
+          html += `<option value="${esc(sel)}" selected>` +
+            `${esc(accountOptionText(sel, selName || ""))} (other chart of accounts)</option>`;
+        }
+        return html;
       }
       function methodOptions(sel) {
         return ["cash", "wave", "orange"].map((m) => `<option value="${m}" ${m === sel ? "selected" : ""}>${METHOD_LABELS[m]}</option>`).join("");
@@ -766,9 +808,9 @@
           `<td>${t.source === "recorded" ? `<button class="mini-btn" data-edit="${esc(t.transaction_id)}">Edit</button>` : `<span class="tx-count">review screen</span>`}</td></tr>`;
       }
       function editRowHtml(t) {
-        return `<tr><td><input type="text" id="e_date" value="${esc(t.recorded_at || "")}"></td>` +
+        return `<tr><td><input type="datetime-local" id="e_date" value="${esc(toDateInput(t.recorded_at))}"></td>` +
           `<td><input type="text" id="e_ben" value="${esc(t.beneficiary || "")}"></td>` +
-          `<td><select id="e_acc">${accountOptions(t.account_code || "")}</select></td>` +
+          `<td><select id="e_acc">${accountOptions(t.account_code || "", t.account_name || "")}</select></td>` +
           `<td><input type="text" id="e_desc" value="${esc(t.description || "")}"></td>` +
           `<td><select id="e_method">${methodOptions(t.method || "")}</select></td>` +
           `<td><input type="text" class="num" id="e_amt" value="${esc(String(t.amount))}"></td>` +
@@ -787,7 +829,7 @@
         try {
           await api(`/api/transaction/${encodeURIComponent(id)}`, { method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ beneficiary: $("e_ben").value.trim(), accountCode: $("e_acc").value,
-              description: $("e_desc").value.trim(), method: $("e_method").value, amount: isNaN(amt) ? 0 : amt, recordedAt: $("e_date").value.trim() }) });
+              description: $("e_desc").value.trim(), method: $("e_method").value, amount: isNaN(amt) ? 0 : amt, recordedAt: fromDateInput($("e_date").value) }) });
           editingId = null; toast("Saved", "ok"); await load();
         } catch (e) { toast("Save failed", "err"); }
       }
