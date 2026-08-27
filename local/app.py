@@ -1,4 +1,5 @@
 import os
+import json
 import base64
 import threading
 import webbrowser
@@ -12,6 +13,7 @@ import mysql_ledger
 import printing
 import settings
 import prf_export
+import accounts
 import zone_pdf
 import zone_fetch
 
@@ -26,26 +28,6 @@ METHOD_LABELS = {"cash": "ESPÈCES", "wave": "WAVE", "orange": "ORANGE"}
 MISSION_LABELS = {
     "east": "Cote D'ivoire Abidjan East Mission",
     "south": "Cote D'ivoire Abidjan South Mission",
-}
-
-ACCOUNT_CODES = {
-    "00": "400-5102 Travel In-field", "01": "400-5700 Furnishings YM",
-    "02": "400-5930 Food and Personal Items", "03": "400-5868 Utilities YM",
-    "04": "400-5862 Rent YM", "05": "400-5920 Charitable Assistance",
-    "06": "400-5221 Book of Mormon", "10": "000-5102 Travel Admin",
-    "11": "000-5496 Luncheons, Socials & Hosting",
-    "12": "000-5860 Small Purchases/Services for Mission Home & Office",
-    "13": "000-5500 Miscellaneous", "14": "000-5370 Telephone and Internet",
-    "15": "000-5221 Teaching Literature and Supplies",
-    "16": "000-5200 Operating materials and supplies",
-    "17": "000-5170 Vehicle Gasoline", "18": "000-5379 Postage and Mailing",
-    "19": "000-5700 Small Office Equipment", "20": "000-5461 Bank Fees",
-    "21": "000-5776 Small Office Equipment and Maintenance",
-    "22": "000-5862 Rent Admin", "23": "000-5868 Utilities Admin",
-    "30": "480-5862 Rent SM", "31": "480-5700 Furnishings SM",
-    "32": "480-5868 Utilities SM", "40": "600-5480 Vehicle Taxes and Fees",
-    "41": "600-5700 Vehicle Equipment", "42": "600-5772 Vehicle Maintenance and repairs",
-    "50": "900-5102 Travel, Baggage, Visa and Other", "51": "900-5949 Missionary Medical",
 }
 
 def _img_to_data_url(val):
@@ -187,19 +169,27 @@ def _apply_edits(t, data):
             t[k] = data[k]
     if data.get("mission") in MISSIONS:
         t["mission"] = data["mission"]
+    if data.get("recordedAt"):
+        t["recordedAt"] = data["recordedAt"]
     if "amount" in data:
         try:
             t["amount"] = int(data["amount"])
         except (TypeError, ValueError):
             pass
-    if data.get("accountCode") in ACCOUNT_CODES and not data.get("accountName"):
-        t["accountName"] = ACCOUNT_CODES[data["accountCode"]]
+    if data.get("accountCode") and not data.get("accountName"):
+        name = accounts.name(t.get("mission"), data["accountCode"])
+        if name:
+            t["accountName"] = name
 
 def _remember_handled(t):
     STATE["handled"][t["id"]] = t
     if len(STATE["handled"]) > HANDLED_CAP:
         for k in list(STATE["handled"].keys())[:-HANDLED_CAP]:
             STATE["handled"].pop(k, None)
+
+def _json_for_script(obj):
+    """JSON safe to drop inside a <script> block."""
+    return json.dumps(obj).replace("<", "\\u003c")
 
 def _static_version():
     v = 0
@@ -212,7 +202,8 @@ def _static_version():
 
 @app.route("/")
 def index():
-    return render_template("review.html", asset_v=_static_version())
+    return render_template("review.html", asset_v=_static_version(),
+                           accounts_json=_json_for_script(accounts.BY_MISSION))
 
 @app.route("/api/state")
 def api_state():
@@ -227,6 +218,7 @@ def api_state():
         "cloud": cloud.is_cloud(),
         "demoReason": cloud.demo_reason(),
         "silentPrint": printing.is_available(),
+        "zonePrint": zone_pdf.available(),
         "queue": [_light(t) for t in _visible()],
     })
 
@@ -322,7 +314,12 @@ def api_zonefund(tx_id):
 
 @app.route("/api/zonefund/<tx_id>.png")
 def api_zonefund_png(tx_id):
-    png = zone_pdf.first_page_png(_zone_pdf_bytes(_find_any(tx_id)))
+    pdf = _zone_pdf_bytes(_find_any(tx_id))
+    if not pdf:
+        abort(404)
+    if not zone_pdf.available():
+        return jsonify({"error": zone_pdf.unavailable_reason()}), 501
+    png = zone_pdf.first_page_png(pdf)
     if not png:
         abort(404)
     return Response(png, mimetype="image/png")
@@ -356,6 +353,7 @@ def api_approve(tx_id):
             printing.save_pdf_async(batch_html, storage.batch_pdf_path(rollover), tag="csvbatch")
             if no_print or printing.print_html_async(batch_html, tag="csvbatch"):
                 rollover = None
+    zone_dropped = bool(t.get("_zoneDropped"))
     _remember_handled(t)
     try:
         cloud.delete_tx(t["id"])
@@ -363,7 +361,9 @@ def api_approve(tx_id):
         app.logger.warning("cloud delete (approve) failed: %s", e)
     storage.delete_receipts(t["id"])
     STATE["all"] = [x for x in STATE["all"] if x["id"] != t["id"]]
-    return jsonify({"ok": True, "rollover": rollover, "printed": printed})
+    return jsonify({"ok": True, "rollover": rollover, "printed": printed,
+                    "zoneDropped": zone_dropped,
+                    "zoneReason": zone_pdf.unavailable_reason() if zone_dropped else ""})
 
 @app.route("/api/delete/<tx_id>", methods=["POST"])
 def api_delete(tx_id):
@@ -495,7 +495,7 @@ def api_dashboard():
     by_account = sorted(bucket(lambda r: r.get("account_code")).values(),
                         key=lambda x: abs(x["total"]), reverse=True)
     for b in by_account:
-        b["label"] = (b["key"] + " " + ACCOUNT_CODES.get(b["key"], "")).strip() or "(none)"
+        b["label"] = (b["key"] + " " + accounts.name(mission, b["key"])).strip() or "(none)"
     by_method = sorted(bucket(lambda r: r.get("method")).values(),
                        key=lambda x: abs(x["total"]), reverse=True)
     for b in by_method:
@@ -525,9 +525,11 @@ def api_dashboard():
         "byAccount": by_account, "byMethod": by_method,
         "byBeneficiary": by_beneficiary, "byDate": by_date,
         "locations": locations,
-        "accountCodes": ACCOUNT_CODES,
+        "accountCodes": accounts.codes(mission),
+        "accountSeries": accounts.for_mission(mission)["series"],
         "denominations": prf_export.cash_denominations(),
         "templateReady": prf_export.available(),
+        "templateReason": prf_export.unavailable_reason(),
         "silentPrint": printing.is_available(),
         "cash": settings.get_cash(mission, period),
         "mysql": {
@@ -541,6 +543,11 @@ def api_dashboard():
 def api_query():
     return jsonify(mysql_ledger.run_query((request.json or {}).get("sql", "")))
 
+def _row_mission(tx_id):
+    row = storage.get_transaction(tx_id) or {}
+    m = row.get("mission")
+    return m if m in MISSIONS else STATE["mission"]
+
 @app.route("/api/transaction/<tx_id>", methods=["POST"])
 def api_update_transaction(tx_id):
     data = request.json or {}
@@ -553,12 +560,13 @@ def api_update_transaction(tx_id):
         fields["method"] = data["method"]
     if data.get("mission") in MISSIONS:
         fields["mission"] = data["mission"]
-    if "recordedAt" in data:
+    if data.get("recordedAt"):
         fields["recorded_at"] = data["recordedAt"]
     if "accountCode" in data:
         fields["account_code"] = data["accountCode"]
-        if data["accountCode"] in ACCOUNT_CODES:
-            fields["account_name"] = ACCOUNT_CODES[data["accountCode"]]
+        name = accounts.name(fields.get("mission") or _row_mission(tx_id), data["accountCode"])
+        if name or not data["accountCode"]:
+            fields["account_name"] = name
     if "amount" in data:
         fields["amount"] = data["amount"]
     if not storage.update_transaction(tx_id, fields):
@@ -605,7 +613,8 @@ def api_close_excel():
         res = prf_export.fill_close(
             mission=mission, mission_label=MISSION_LABELS.get(mission, ""),
             period=period, account_totals=_account_totals(mission, period),
-            account_codes=ACCOUNT_CODES, cash_counts=data.get("cash") or {},
+            account_codes=accounts.codes(mission),
+            gl_prefix=accounts.gl_prefix(mission), cash_counts=data.get("cash") or {},
             wave=data.get("wave"), orange=data.get("orange"),
             date_range=_period_date_range(mission, period),
         )
@@ -681,6 +690,13 @@ def _render_record_html(t, auto_print):
         except ValueError:
             date_iso = t["recordedAt"][:10]
     zone_pages = zone_pdf.pages_to_png_data_urls(_zone_pdf_bytes(t)) if t.get("zoneFund") else []
+    # A sheet that is attached but renders to nothing would otherwise drop off
+    # the printout with no sign that anything was missing.
+    t["_zoneDropped"] = bool(t.get("zoneFund")) and not zone_pages
+    if t["_zoneDropped"]:
+        app.logger.warning("zone fund sheet for %s could not be printed: %s",
+                           t.get("id", ""), zone_pdf.unavailable_reason() or
+                           "the sheet could not be fetched from Google Sheets")
     return render_template(
         "record.html",
         beneficiary=t["beneficiary"],

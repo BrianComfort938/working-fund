@@ -231,6 +231,11 @@
 
   <div id="keytipLayer" class="keytip-layer hidden"></div>
   <div id="toast" class="toast hidden"></div>
+  <script>
+    // Per-mission chart of accounts, straight from local/accounts.py so the
+    // review portal and the Excel export can never disagree.
+    window.WORKINGFUND_ACCOUNTS = {{ accounts_json | safe }};
+  </script>
   <script src="/static/review.js?v={{ asset_v }}">
 </script>
 </body>

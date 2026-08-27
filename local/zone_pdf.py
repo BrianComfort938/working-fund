@@ -10,6 +10,12 @@ MAX_PAGES = 4
 def available():
     return fitz is not None
 
+def unavailable_reason():
+    if fitz is None:
+        return ("PyMuPDF is not installed, so zone fund sheets cannot be turned "
+                "into printable pages. Run: pip install -r local/requirements.txt")
+    return ""
+
 def _render_pngs(pdf_bytes, zoom, limit):
     if not fitz or not pdf_bytes:
         return []

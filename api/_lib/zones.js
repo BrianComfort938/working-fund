@@ -14,8 +14,14 @@ const KNOWN_SANTE_GID = {
 };
 
 const SHEET_ID_RE = /^[A-Za-z0-9_-]{20,}$/;
-const FETCH_TIMEOUT_MS = 8000;
+const FETCH_TIMEOUT_MS = 6000;
 const _gidCache = {};
+
+// Google throttles bursts and occasionally times out. Failing here means the
+// recording app attaches no PDF at all, and the sheet then has to be re-fetched
+// at print time, so give a failed export a couple of quick second chances.
+const RETRY_DELAYS_MS = [500, 1500];
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const timeoutSignal = () =>
   (typeof AbortSignal !== "undefined" && AbortSignal.timeout ? AbortSignal.timeout(FETCH_TIMEOUT_MS) : undefined);
@@ -46,20 +52,32 @@ async function resolveGid(sheetId, type) {
   try { return await resolveTabGid(sheetId, "SANTE"); } catch (_) { return null; }
 }
 
+async function exportOnce(url) {
+  const r = await fetch(url, { redirect: "follow", signal: timeoutSignal() });
+  if (!r.ok) return null;
+  const ct = r.headers.get("content-type") || "";
+  if (ct.indexOf("pdf") === -1) return null;
+  const buffer = Buffer.from(await r.arrayBuffer());
+  return buffer.length ? buffer : null;
+}
+
 async function fetchZonePdf(sheetId, type) {
   if (!SHEET_ID_RE.test(String(sheetId || ""))) return null;
+  let gid = null;
   try {
-    const gid = await resolveGid(sheetId, type);
-    if (gid == null) return null;
-    const r = await fetch(exportUrl(sheetId, gid), { redirect: "follow", signal: timeoutSignal() });
-    if (!r.ok) return null;
-    const ct = r.headers.get("content-type") || "";
-    if (ct.indexOf("pdf") === -1) return null;
-    const buffer = Buffer.from(await r.arrayBuffer());
-    return buffer.length ? { buffer, gid } : null;
-  } catch (_) {
-    return null;
+    gid = await resolveGid(sheetId, type);
+  } catch (_) { /* handled below */ }
+  if (gid == null) return null;
+
+  const url = exportUrl(sheetId, gid);
+  for (const delay of [0, ...RETRY_DELAYS_MS]) {
+    if (delay) await sleep(delay);
+    try {
+      const buffer = await exportOnce(url);
+      if (buffer) return { buffer, gid };
+    } catch (_) { /* transient, try again */ }
   }
+  return null;
 }
 
 module.exports = { fetchZonePdf, resolveGid, exportUrl };

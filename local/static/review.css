@@ -233,6 +233,7 @@ main#historyView {
   background: var(--empty);
 }
 .rec-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.rec-grid.three { grid-template-columns: 1.4fr 1fr 1fr; }
 .rec-value { font-size: 16px; padding: 2px 0; }
 .rec-value.mono { font-family: var(--mono); }
 .rec-value.muted { color: var(--muted); font-size: 14px; }
