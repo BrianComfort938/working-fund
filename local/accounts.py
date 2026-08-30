@@ -75,7 +75,7 @@ SOUTH_CODES = {
     "42": "600-5772 Vehicle Maintenance and Repairs (Vehicles)",
     "50": "900-5102 Travel - Baggage, Visa Other (Other)",
     "51": "900-5949 Missionary Medical (Other)",
-    "53": "900-1300 Missionary Accounts (Other)",
+    "52": "900-1300 Missionary Accounts (Other)",
 }
 
 BY_MISSION = {
