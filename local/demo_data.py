@@ -74,6 +74,14 @@ SAMPLES = [
         "signature": _DEMO_SIG,
     },
     {
+        "_id": "demo9", "mission": "north", "beneficiary": "Elder Kouassi",
+        "accountCode": "17", "accountName": "000-5170 Vehicle Gasoline (Admin)",
+        "description": "Carburant pour le vehicule de la mission", "amount": 25000,
+        "currency": "XOF", "method": "cash", "createdAt": _NOW - timedelta(days=2),
+        "receiptImage": _svg_receipt("MAIN", "#2e7d32"), "secondReceiptImage": "",
+        "signature": _DEMO_SIG,
+    },
+    {
         "_id": "demo5", "mission": "east", "beneficiary": "Elder Mensah",
         "accountCode": "00", "accountName": "400-5102 Travel In-field",
         "description": "Transport en commun pour un rendez-vous", "amount": 4500,
