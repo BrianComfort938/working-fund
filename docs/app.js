@@ -44,8 +44,9 @@
 
   const cfg = window.WORKINGFUND_CONFIG || {};
   const CURRENCY = cfg.CURRENCY || "XOF";
-  const MISSIONS = ["east", "south"];
-  const titleCase = (m) => (m === "south" ? "South" : "East");
+  const MISSION_NAMES = { east: "East", south: "South", north: "North" };
+  const MISSIONS = Object.keys(MISSION_NAMES);
+  const titleCase = (m) => MISSION_NAMES[m] || "East";
   const SECOND_RECEIPT = { wave: "Wave receipt", orange: "Orange Money receipt" };
   const METHOD_LABELS = { cash: "Cash", wave: "Wave", orange: "Orange Money" };
 

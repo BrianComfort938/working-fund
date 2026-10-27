@@ -53,7 +53,8 @@ html, body { margin: 0; background: var(--bg); color: var(--text); font-family: 
   background: var(--panel-alt); color: var(--text); border: 1px solid var(--border-strong);
   padding: 9px 13px; font-size: 14px; font-weight: 500; cursor: pointer; font-family: inherit;
 }
-.mission-tab:first-child { border-radius: var(--radius) 0 0 var(--radius); border-right: none; }
+.mission-tab:not(:last-child) { border-right: none; }
+.mission-tab:first-child { border-radius: var(--radius) 0 0 var(--radius); }
 .mission-tab:last-child { border-radius: 0 var(--radius) var(--radius) 0; }
 .mission-tab .cnt {
   background: var(--border); color: var(--muted); border-radius: 999px;
@@ -396,6 +397,7 @@ kbd {
 }
 .mission-pill.east  { background: var(--blue-soft); border-color: var(--blue); color: var(--blue); }
 .mission-pill.south { background: #f3e9f7; border-color: #6a3d9a; color: #6a3d9a; }
+.mission-pill.north { background: #e8f3e9; border-color: #2e7d32; color: #2e7d32; }
 
 .modal { position: fixed; inset: 0; z-index: 100; background: rgba(45, 60, 69, .55); display: flex; align-items: center; justify-content: center; padding: 16px; }
 .modal-card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; width: 100%; max-width: 440px; max-height: 92vh; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 10px 40px rgba(20, 33, 42, .4); }

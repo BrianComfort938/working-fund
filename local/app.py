@@ -20,7 +20,7 @@ import zone_fetch
 app = Flask(__name__)
 
 STATE = {"all": [], "mission": "east", "period": "000", "handled": {}}
-MISSIONS = ("east", "south")
+MISSIONS = ("east", "south", "north")
 HANDLED_CAP = 60
 
 METHOD_LABELS = {"cash": "ESPÈCES", "wave": "WAVE", "orange": "ORANGE"}
@@ -28,6 +28,7 @@ METHOD_LABELS = {"cash": "ESPÈCES", "wave": "WAVE", "orange": "ORANGE"}
 MISSION_LABELS = {
     "east": "Cote D'ivoire Abidjan East Mission",
     "south": "Cote D'ivoire Abidjan South Mission",
+    "north": "Cote D'ivoire Abidjan North Mission",
 }
 
 def _img_to_data_url(val):
@@ -226,7 +227,7 @@ def api_state():
 def api_mission():
     m = (request.json or {}).get("mission", "")
     if m not in MISSIONS:
-        return jsonify({"error": "mission must be east or south"}), 400
+        return jsonify({"error": "mission must be east, south or north"}), 400
     STATE["mission"] = m
     return jsonify({"mission": m, "counts": _mission_counts(), "queue": [_light(t) for t in _visible()]})
 
@@ -792,7 +793,7 @@ def main():
     counts = _mission_counts()
     tail = "" if cloud.is_cloud() else ("\n  Showing DEMO data. Reason: " + cloud.demo_reason())
     print(f"\n  Working Fund review: {len(STATE['all'])} transaction(s) "
-          f"(East {counts['east']}, South {counts['south']}).{tail}")
+          f"(East {counts['east']}, South {counts['south']}, North {counts['north']}).{tail}")
     if port != 5000:
         print(f"  (Port 5000 was busy, so using {port} instead.)")
     print(f"  Open http://127.0.0.1:{port}/  (a browser tab should open automatically)\n")

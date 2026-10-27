@@ -1,8 +1,9 @@
 const { getDb } = require("./_lib/db");
 const { withCors, readBody } = require("./_lib/cors");
+const { normMission } = require("./_lib/missions");
 
 function docId(mission) {
-  return "wave_balance_" + (mission === "south" ? "south" : "east");
+  return "wave_balance_" + normMission(mission);
 }
 
 module.exports = async (req, res) => {
@@ -14,7 +15,7 @@ module.exports = async (req, res) => {
     if (req.method === "PUT") {
       const body = readBody(req);
       const wave = Number(body.wave);
-      const mission = body.mission === "south" ? "south" : "east";
+      const mission = normMission(body.mission);
       if (Number.isNaN(wave)) return res.status(400).json({ error: "wave must be a number" });
       await col.updateOne(
         { _id: docId(mission) },
@@ -25,7 +26,7 @@ module.exports = async (req, res) => {
     }
 
     if (req.method === "GET") {
-      const mission = (req.query && req.query.mission === "south") ? "south" : "east";
+      const mission = normMission(req.query && req.query.mission);
       const doc = await col.findOne({ _id: docId(mission) });
       return res.json({ wave: doc ? doc.value : null, mission });
     }

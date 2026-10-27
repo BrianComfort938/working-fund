@@ -19,7 +19,7 @@ Three free services, no credit card needed:
 
 > The database (`workingfund`) and collections (`transactions`, `system_settings`)
 > are created automatically on the first write, so there is nothing to set up by hand.
-> Each transaction carries a `mission` field (`east` or `south`); the Wave balance
+> Each transaction carries a `mission` field (`east`, `south` or `north`); the Wave balance
 > is stored per mission.
 
 ---

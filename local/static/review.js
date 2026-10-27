@@ -32,8 +32,9 @@
     const n = Math.abs(parseInt(amt, 10) || 0);
     return (amt < 0 ? "-" : "") + groupDigits(n) + " " + (cur || "XOF");
   };
-  const MISSIONS = ["east", "south"];
-  const titleCase = (m) => (m === "south" ? "South" : "East");
+  const MISSION_NAMES = { east: "East", south: "South", north: "North" };
+  const MISSIONS = Object.keys(MISSION_NAMES);
+  const titleCase = (m) => MISSION_NAMES[m] || "East";
   const METHOD_LABELS = { cash: "Cash", wave: "Wave", orange: "Orange Money" };
   const methodLabel = (m) => METHOD_LABELS[m] || m || "";
 
@@ -43,7 +44,7 @@
 
   const $ = (id) => document.getElementById(id);
   const state = {
-    queue: [], idx: 0, period: "000", mission: "east", counts: { east: 0, south: 0 },
+    queue: [], idx: 0, period: "000", mission: "east", counts: { east: 0, south: 0, north: 0 },
     cloud: false, silentPrint: false, zonePrint: true, calRef: null, view: "review",
   };
 
@@ -84,7 +85,7 @@
     state.demoReason = s.demoReason || "";
     state.silentPrint = !!s.silentPrint;
     state.zonePrint = s.zonePrint !== false;
-    state.counts = s.counts || { east: 0, south: 0 };
+    state.counts = s.counts || { east: 0, south: 0, north: 0 };
     $("period").value = s.period;
     const savedPeriod = localStorage.getItem("workingfund_period");
     if (savedPeriod && savedPeriod !== s.period) {
@@ -96,8 +97,9 @@
     localStorage.setItem("workingfund_period", state.period);
     const saved = localStorage.getItem("workingfund_mission");
     let wanted = MISSIONS.indexOf(saved) !== -1 ? saved : s.mission;
-    if (!state.counts[wanted] && state.counts[wanted === "east" ? "south" : "east"]) {
-      wanted = wanted === "east" ? "south" : "east";
+    if (!state.counts[wanted]) {
+      const busy = MISSIONS.find((m) => state.counts[m]);
+      if (busy) wanted = busy;
     }
     if (wanted === s.mission) { state.mission = s.mission; state.queue = s.queue; }
     else {
@@ -136,6 +138,7 @@
     renderDemoBanner();
     $("cntEast").textContent = state.counts.east || 0;
     $("cntSouth").textContent = state.counts.south || 0;
+    $("cntNorth").textContent = state.counts.north || 0;
     document.querySelectorAll(".mission-tab").forEach((b) =>
       b.setAttribute("aria-pressed", String(b.dataset.mission === state.mission)));
     $("progress").textContent = state.queue.length ? `${state.idx + 1} / ${state.queue.length}` : "0 / 0";

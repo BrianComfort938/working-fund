@@ -290,8 +290,9 @@
       const MISSION = params.get("mission") || "east";
       const PERIOD = params.get("period") || "000";
       const METHOD_LABELS = { cash: "Cash", wave: "Wave", orange: "Orange Money" };
-      const MISSIONS = ["east", "south"];
-      const titleCase = (m) => (m === "south" ? "South" : "East");
+      const MISSION_NAMES = { east: "East", south: "South", north: "North" };
+      const MISSIONS = Object.keys(MISSION_NAMES);
+      const titleCase = (m) => MISSION_NAMES[m] || "East";
       const PALETTE = ["#00618a", "#2e7d32", "#e3811d", "#6a3d9a", "#b3261e", "#1f9e89", "#c2185b", "#5d4037", "#455a64", "#7cb342"];
       const groupDigits = (s) => String(s).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
       const xof = (n) => { n = parseInt(n, 10) || 0; return (n < 0 ? "-" : "") + groupDigits(Math.abs(n)) + " XOF"; };

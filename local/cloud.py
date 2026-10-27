@@ -56,7 +56,7 @@ def fetch_all(mission=None):
     try:
         col = _connect()
         query = {}
-        if mission in ("east", "south"):
+        if mission in ("east", "south", "north"):
             query["mission"] = mission
         docs = list(col.find(query).sort("createdAt", 1))
         _conn_error = None

@@ -1,6 +1,7 @@
 const { Binary } = require("mongodb");
 const { getDb } = require("./_lib/db");
 const { withCors, readBody } = require("./_lib/cors");
+const { isMission, normMission } = require("./_lib/missions");
 
 const SHEET_ID_RE = /^[A-Za-z0-9_-]{20,}$/;
 
@@ -51,7 +52,7 @@ module.exports = async (req, res) => {
     if (req.method === "POST") {
       const body = readBody(req);
       const doc = {
-        mission: body.mission === "south" ? "south" : "east",
+        mission: normMission(body.mission),
         beneficiary: body.beneficiary || "",
         accountCode: body.accountCode || "",
         accountName: body.accountName || "",
@@ -81,7 +82,7 @@ module.exports = async (req, res) => {
       const q = req.query || {};
       const all = q.all === "1" || q.all === "true";
       const query = all ? {} : { logged: { $ne: true } };
-      if (q.mission === "east" || q.mission === "south") query.mission = q.mission;
+      if (isMission(q.mission)) query.mission = q.mission;
       const docs = await col.find(query).sort({ createdAt: 1 }).toArray();
       return res.json(docs);
     }

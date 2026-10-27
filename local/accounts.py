@@ -1,7 +1,7 @@
 """Account codes, per mission.
 
-Each mission has its own chart of accounts, so changing South's list must never
-touch East's. The browser side keeps its own copy in docs/accounts.js; change
+Each mission has its own chart of accounts, so changing one mission's list must
+never touch another's. The browser side keeps its own copy in docs/accounts.js; change
 both together.
 
 CODES: the key is what gets stored as account_code; the value is what gets
@@ -78,9 +78,50 @@ SOUTH_CODES = {
     "52": "900-1925 Security Deposits (Other)"
 }
 
+NORTH_SERIES = {
+    "000": {"label": "Admin", "color": "#00618a"},
+    "400": {"label": "Support", "color": "#2e7d32"},
+    "480": {"label": "Couples", "color": "#6a3d9a"},
+    "600": {"label": "Vehicles", "color": "#e3811d"},
+    "900": {"label": "Other", "color": "#b3261e"},
+}
+
+NORTH_CODES = {
+    "00": "400-5102 Travel - Baggage, Visa Other (Support)",
+    "01": "400-5700 Furnishings (Support)",
+    "02": "400-5930 Food and Other Expenses (Support)",
+    "03": "400-5868 Utilities (Support)",
+    "04": "400-5862 Rent (Support)",
+    "05": "400-5920 Charitable Assistance (Support)",
+    "10": "000-5102 Travel - Baggage, Visa Other (Admin)",
+    "11": "000-5496 Luncheons, Socials, and Hosting (Admin)",
+    "12": "000-5860 Small Purch/Serv for Mission Home (Admin)",
+    "13": "000-5500 Miscellaneous (Admin)",
+    "14": "000-5370 Telephone and Internet (Admin)",
+    "15": "000-5221 Teaching Literature and Supplies (Admin)",
+    "16": "000-5200 Operating Materials and Supplies (Admin)",
+    "17": "000-5170 Vehicle Gasoline (Admin)",
+    "18": "000-5379 Postage and Mailing (Admin)",
+    "19": "000-5700 Furnishings (Admin)",
+    "20": "000-5461 Bank Service Charges and Fees (Admin)",
+    "21": "000-5776 Small Equipment Maintenance (Admin)",
+    "22": "000-5862 Rent (Admin)",
+    "23": "000-5868 Utilities (Admin)",
+    "30": "480-5862 Rent (Couples)",
+    "31": "480-5700 Furnishings (Couples)",
+    "32": "480-5868 Utilities (Couples)",
+    "40": "600-5480 Vehicle Taxes and Fees (Vehicles)",
+    "41": "600-5700 Furnishings (Vehicles)",
+    "42": "600-5772 Vehicle Maintenance and Repairs (Vehicles)",
+    "50": "900-5102 Travel - Baggage, Visa Other (Other)",
+    "51": "900-5949 Missionary Medical (Other)",
+    "52": "900-1925 Security Deposits (Other)"
+}
+
 BY_MISSION = {
     "east": {"glPrefix": "1385", "series": EAST_SERIES, "codes": EAST_CODES},
     "south": {"glPrefix": "1389", "series": SOUTH_SERIES, "codes": SOUTH_CODES},
+    "north": {"glPrefix": "1388", "series": NORTH_SERIES, "codes": NORTH_CODES},
 }
 
 DEFAULT_MISSION = "east"
